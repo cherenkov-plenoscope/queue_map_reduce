@@ -1,13 +1,12 @@
-import numpy
 import pickle
 import os
 import stat
-import subprocess as sp
+import subprocess
 import qstat
 import time
 
 
-def submitt_qsub(
+def qsub(
     script_exe_path,
     script_path,
     arguments,
@@ -40,15 +39,15 @@ def submitt_qsub(
         cmd += [argument]
 
     try:
-        sp.check_output(cmd, stderr=sp.STDOUT)
-    except sp.CalledProcessError as e:
+        subprocess.check_output(cmd, stderr=subprocess.STDOUT)
+    except subprocess.CalledProcessError as e:
         print('returncode', e.returncode)
         print('output', e.output)
         raise
 
 
 def current_python_path():
-    bin_stdout = sp.check_output(['which', 'python'])
+    bin_stdout = subprocess.check_output(['which', 'python'])
     stdout = bin_stdout.decode('ascii')
     # remove newline
     stdout = stdout.strip()
@@ -99,25 +98,22 @@ def map(function, jobs, python_path=None):
     st = os.stat(script_path)
     os.chmod(script_path, st.st_mode | stat.S_IEXEC)
 
-    time_stamp = job_name_timestamp()
     job_names = []
     for idx in range(len(jobs)):
         job_names.append(
             job_name(
                 time_stamp=time_stamp,
                 idx=idx))
-        submitt_qsub(
+        qsub(
             script_exe_path=python_path,
             script_path=script_path,
             arguments=[job_path(tmp_dir, idx)],
             job_name=job_names[-1],
             queue_name=None,
             stdout_path=job_path(tmp_dir, idx)+'.o',
-            stderr_path=job_path(tmp_dir, idx)+'.e',
-        )
+            stderr_path=job_path(tmp_dir, idx)+'.e',)
 
     job_names_set = set(job_names)
-    user_name = os.environ['USER']
     still_running = True
     while still_running:
         running, pending = qstat.qstat()
