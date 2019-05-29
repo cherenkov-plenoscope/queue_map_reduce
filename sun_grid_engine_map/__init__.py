@@ -69,7 +69,7 @@ def job_name(time_stamp, idx):
     return "cp.{:s}.{:09d}".format(time_stamp, idx)
 
 
-def map(function, jobs, python_path=None):
+def map(function, jobs, queue_name=None, python_path=None):
     if python_path is None:
         python_path = current_python_path()
 
@@ -109,7 +109,7 @@ def map(function, jobs, python_path=None):
             script_path=script_path,
             arguments=[job_path(tmp_dir, idx)],
             job_name=job_names[-1],
-            queue_name=None,
+            queue_name=queue_name,
             stdout_path=job_path(tmp_dir, idx)+'.o',
             stderr_path=job_path(tmp_dir, idx)+'.e',)
 
