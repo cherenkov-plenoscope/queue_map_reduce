@@ -4,6 +4,7 @@ import stat
 import subprocess
 import qstat
 import time
+import shutil
 
 
 def qsub(
@@ -69,6 +70,20 @@ def job_name(time_stamp, idx):
     return "cp.{:s}.{:09d}".format(time_stamp, idx)
 
 
+def tear_down_tmp_dir(path, num_jobs):
+    no_errors = True
+    for idx in range(num_jobs):
+        e_path = job_path(path, idx)+'.e'
+        if os.stat(e_path).st_size == 0:
+            os.remove(job_path(path, idx))
+            os.remove(job_path(path, idx)+'.o')
+            os.remove(job_path(path, idx)+'.e')
+        else:
+            no_errors = False
+    if no_errors:
+        shutil.rmtree(path)
+
+
 def map(function, jobs, queue_name=None, python_path=None):
     if python_path is None:
         python_path = current_python_path()
@@ -125,5 +140,7 @@ def map(function, jobs, queue_name=None, python_path=None):
                 num_running += 1
         print("{:d} jobs are still running".format(num_running))
         time.sleep(5)
+
+    tear_down_tmp_dir(path=tmp_dir, num_jobs=len(jobs))
 
     return True
