@@ -81,9 +81,9 @@ def __local_sub(
                 stderr=fstderr)
 
 
-def __job_path(tmp_dir, idx):
+def __job_path(work_dir, idx):
     return os.path.abspath(
-        os.path.join(tmp_dir, "{:09d}.pkl".format(idx)))
+        os.path.join(work_dir, "{:09d}.pkl".format(idx)))
 
 
 def __timestamp():
@@ -102,10 +102,10 @@ def __make_job_name(timestamp, idx):
     return "q{:s}.{:09d}".format(timestamp, idx)
 
 
-def __has_non_zero_stderrs(tmp_dir, num_jobs):
+def __has_non_zero_stderrs(work_dir, num_jobs):
     has_errors = False
     for idx in range(num_jobs):
-        e_path = __job_path(tmp_dir, idx)+'.e'
+        e_path = __job_path(work_dir, idx)+'.e'
         if os.stat(e_path).st_size != 0:
             has_errors = True
     return has_errors
@@ -131,8 +131,8 @@ def map(
     python_path=os.path.abspath(shutil.which('python')),
     polling_interval_qstat=5,
     verbose=True,
-    dump_path=os.path.abspath(os.path.join('.', 'qsub_dumb')),
-    force_dump=False,
+    work_dir=None,
+    keep_work_dir=False,
 ):
     """
     Maps jobs to a function for embarrassingly parallel processing on a qsub
@@ -170,9 +170,11 @@ def map(
         for the jobs to finish.
     verbose : bool, optional
         Print to stdout.
-    force_dump : bool, optional
-        When True, the working directory will be dumped in any case to
-        dump_path.
+    work_dir : string, optional
+        The directory path where the jobs, the results and the
+        worker-node-script is stored.
+    keep_work_dir : bool, optional
+        When True, the working directory will not be removed.
 
     Example
     -------
@@ -181,6 +183,9 @@ def map(
         jobs=[numpy.arange(i, 100+i) for i in range(10)])
     """
     timestamp = __timestamp()
+    if work_dir is None:
+        work_dir = os.path.abspath(os.path.join('.', '.qsub'+timestamp))
+
     QSUB = shutil.which('qsub') is not None
 
     if verbose:
@@ -190,15 +195,14 @@ def map(
         else:
             print(__print_template("No qsub. Falling back to serial."))
 
-    tmp_dir = os.path.abspath(os.path.join('.', '.qsub'+timestamp))
-    os.makedirs(tmp_dir)
+    os.makedirs(work_dir)
     if verbose:
-        print(__print_template("Tmp dir {:s}".format(tmp_dir)))
+        print(__print_template("Tmp dir {:s}".format(work_dir)))
 
     if verbose:
         print(__print_template("Write jobs."))
     for idx, job in enumerate(jobs):
-        with open(__job_path(tmp_dir, idx), 'wb') as f:
+        with open(__job_path(work_dir, idx), 'wb') as f:
             f.write(pickle.dumps(job))
 
     if verbose:
@@ -206,7 +210,7 @@ def map(
     script_str = __make_worker_node_script(
         module_name=function.__module__,
         function_name=function.__name__)
-    script_path = os.path.join(tmp_dir, 'worker_node_script.py')
+    script_path = os.path.join(work_dir, 'worker_node_script.py')
     with open(script_path, "wt") as f:
         f.write(script_str)
     st = os.stat(script_path)
@@ -226,11 +230,11 @@ def map(
         submitt(
             script_exe_path=python_path,
             script_path=script_path,
-            arguments=[__job_path(tmp_dir, idx)],
+            arguments=[__job_path(work_dir, idx)],
             job_name=job_names[-1],
             queue_name=queue_name,
-            stdout_path=__job_path(tmp_dir, idx)+'.o',
-            stderr_path=__job_path(tmp_dir, idx)+'.e',)
+            stdout_path=__job_path(work_dir, idx)+'.o',
+            stderr_path=__job_path(work_dir, idx)+'.e',)
 
     if verbose:
         print(__print_template("Wait for jobs to finish."))
@@ -257,7 +261,7 @@ def map(
     results = []
     for idx, job in enumerate(jobs):
         try:
-            result_path = __job_path(tmp_dir, idx)+'.out'
+            result_path = __job_path(work_dir, idx)+'.out'
             with open(result_path, "rb") as f:
                 result = pickle.loads(f.read())
             results.append(result)
@@ -267,13 +271,13 @@ def map(
             results.append(None)
 
     if (
-        __has_non_zero_stderrs(tmp_dir=tmp_dir, num_jobs=len(jobs)) or
-        force_dump
+        __has_non_zero_stderrs(work_dir=work_dir, num_jobs=len(jobs)) or
+        keep_work_dir
     ):
         print(__print_template("Found stderr."))
-        print(__print_template("Dumping to: {:s}".format(tmp_dir)))
+        print(__print_template("Keep work dir: {:s}".format(work_dir)))
     else:
-        shutil.rmtree(tmp_dir)
+        shutil.rmtree(work_dir)
 
     if verbose:
         print(__print_template("Stop: {:s}".format(__human_timestamp())))
