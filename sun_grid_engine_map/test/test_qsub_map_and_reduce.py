@@ -21,7 +21,6 @@ def test_import():
 
 def test_make_worker_node_script():
     with tempfile.TemporaryDirectory(prefix='sge') as tmp:
-        tmp = '.'
         work = numpy.arange(100)
         function = numpy.sum
         with open(os.path.join(tmp, 'work.pkl'), "wb") as f:
@@ -58,10 +57,10 @@ def test_force_dump_tmp_dir():
         results = qmr.map(
             function=GOOD_FUNCTION,
             jobs=GOOD_JOBS,
-            dump_path=os.path.join(tmp, 'my_forced_dump'),
-            force_dump=True)
+            work_dir=os.path.join(tmp, 'my_work_dir'),
+            keep_work_dir=True)
 
-        assert os.path.exists(os.path.join(tmp, 'my_forced_dump'))
+        assert os.path.exists(os.path.join(tmp, 'my_work_dir'))
 
 
 def test_bad_function_creating_stderr():
@@ -69,12 +68,12 @@ def test_bad_function_creating_stderr():
         results = qmr.map(
             function=BAD_FUNCTION,
             jobs=GOOD_JOBS,
-            dump_path=os.path.join(tmp, 'my_dump'))
+            work_dir=os.path.join(tmp, 'my_work_dir'))
 
         assert len(results) == NUM_JOBS
         for r in results:
             assert r is None
-        assert os.path.exists(os.path.join(tmp, 'my_dump'))
+        assert os.path.exists(os.path.join(tmp, 'my_work_dir'))
 
 
 def test_one_bad_job_creating_stderr():
@@ -84,13 +83,13 @@ def test_one_bad_job_creating_stderr():
         results = qmr.map(
             function=GOOD_FUNCTION,
             jobs=bad_jobs,
-            dump_path=os.path.join(tmp, 'my_dump'))
+            work_dir=os.path.join(tmp, 'my_work_dir'))
 
         assert len(results) == NUM_JOBS + 1
         for idx in range(NUM_JOBS):
             assert results[idx] == GOOD_FUNCTION(GOOD_JOBS[idx])
         assert results[idx+1] is None
-        assert os.path.exists(os.path.join(tmp, 'my_dump'))
+        assert os.path.exists(os.path.join(tmp, 'my_work_dir'))
 
 
 def test_minimal_example():
