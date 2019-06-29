@@ -94,8 +94,8 @@ def __human_timestamp():
     return time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
 
 
-def __print_template(msg):
-    return "[Qsub Map and Reduce: {:s}]".format(msg)
+def __print(msg):
+    print("[Qsub Map and Reduce: {:s}]".format(msg))
 
 
 def __make_job_name(timestamp, idx):
@@ -189,24 +189,24 @@ def map(
     QSUB = shutil.which('qsub') is not None
 
     if verbose:
-        print(__print_template("Start: {:s}".format(__human_timestamp())))
+        __print("Start: {:s}".format(__human_timestamp()))
         if QSUB:
-            print(__print_template("Using qsub."))
+            __print("Using qsub.")
         else:
-            print(__print_template("No qsub. Falling back to serial."))
+            __print("No qsub. Falling back to serial.")
 
     os.makedirs(work_dir)
     if verbose:
-        print(__print_template("Tmp dir {:s}".format(work_dir)))
+        __print("Tmp dir {:s}".format(work_dir))
 
     if verbose:
-        print(__print_template("Write jobs."))
+        __print("Write jobs.")
     for idx, job in enumerate(jobs):
         with open(__job_path(work_dir, idx), 'wb') as f:
             f.write(pickle.dumps(job))
 
     if verbose:
-        print(__print_template("Write worker node script."))
+        __print("Write worker node script.")
     script_str = __make_worker_node_script(
         module_name=function.__module__,
         function_name=function.__name__)
@@ -222,7 +222,7 @@ def map(
         submitt = __local_sub
 
     if verbose:
-        print(__print_template("Submitt jobs."))
+        __print("Submitt jobs.")
 
     job_names = []
     for idx in range(len(jobs)):
@@ -237,7 +237,7 @@ def map(
             stderr_path=__job_path(work_dir, idx)+'.e',)
 
     if verbose:
-        print(__print_template("Wait for jobs to finish."))
+        __print("Wait for jobs to finish.")
 
     if QSUB:
         job_names_set = set(job_names)
@@ -248,15 +248,14 @@ def map(
             if num_running == 0 and num_pending == 0:
                 still_running = False
             if verbose:
-                print(
-                    __print_template(
-                        "{:d} running, {:d} pending".format(
-                            num_running,
-                            num_pending)))
+                __print(
+                    "{:d} running, {:d} pending".format(
+                        num_running,
+                        num_pending))
             time.sleep(polling_interval_qstat)
 
     if verbose:
-            print(__print_template("Collect results."))
+        __print("Collect results.")
 
     results = []
     for idx, job in enumerate(jobs):
@@ -266,20 +265,19 @@ def map(
                 result = pickle.loads(f.read())
             results.append(result)
         except FileNotFoundError:
-            print(__print_template(
-                "ERROR. No result {:s}".format(result_path)))
+            __print("ERROR. No result {:s}".format(result_path))
             results.append(None)
 
     if (
         __has_non_zero_stderrs(work_dir=work_dir, num_jobs=len(jobs)) or
         keep_work_dir
     ):
-        print(__print_template("Found stderr."))
-        print(__print_template("Keep work dir: {:s}".format(work_dir)))
+        __print("Found stderr.")
+        __print("Keep work dir: {:s}".format(work_dir))
     else:
         shutil.rmtree(work_dir)
 
     if verbose:
-        print(__print_template("Stop: {:s}".format(__human_timestamp())))
+        __print("Stop: {:s}".format(__human_timestamp()))
 
     return results
