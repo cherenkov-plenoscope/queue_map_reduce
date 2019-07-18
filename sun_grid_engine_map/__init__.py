@@ -112,7 +112,16 @@ def __has_non_zero_stderrs(work_dir, num_jobs):
 
 
 def __num_jobs_running_and_pending(job_names_set):
-    running, pending = qstat.qstat()
+    while True:
+        try:
+            running, pending = qstat.qstat()
+            break
+        except KeyboardInterrupt:
+            raise
+        except Exception as bad:
+            print(bad)
+            time.sleep(1)
+
     num_running = 0
     num_pending = 0
     for j in running:
