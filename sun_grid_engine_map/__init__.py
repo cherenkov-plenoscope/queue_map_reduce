@@ -95,7 +95,7 @@ def _human_timestamp():
 
 
 def _print(msg):
-    print("[Qsub Map and Reduce: {:s}]".format(msg))
+    print('{{"time": "{:s}", "msg": "{:s}"}}'.format(_human_timestamp(), msg,))
 
 
 def _make_job_name(timestamp, idx):
@@ -198,7 +198,7 @@ def map(
     QSUB = shutil.which('qsub') is not None
 
     if verbose:
-        _print("Start: {:s}".format(_human_timestamp()))
+        _print("Start map().")
         if QSUB:
             _print("Using qsub.")
         else:
@@ -287,6 +287,6 @@ def map(
         shutil.rmtree(work_dir)
 
     if verbose:
-        _print("Stop: {:s}".format(_human_timestamp()))
+        _print("Stop map().")
 
     return results
