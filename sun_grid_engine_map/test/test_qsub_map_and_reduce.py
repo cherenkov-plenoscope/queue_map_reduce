@@ -25,7 +25,7 @@ def test_make_worker_node_script():
         function = numpy.sum
         with open(os.path.join(tmp, 'work.pkl'), "wb") as f:
             f.write(pickle.dumps(work))
-        s = qmr.__make_worker_node_script(
+        s = qmr._make_worker_node_script(
             module_name=function.__module__,
             function_name=function.__name__)
         with open(os.path.join(tmp, 'worker_node_script.py'), "wt") as f:
