@@ -12,8 +12,8 @@ def _make_worker_node_script(module_name, function_name, environ):
     add_environ = ''
     for key in environ:
         add_environ += 'os.environ["{key:s}"] = "{value:s}"\n'.format(
-            key=repr(key),
-            value=repr(environ[key])
+            key=key.encode("unicode_escape").decode(),
+            value=environ[key].encode("unicode_escape").decode()
         )
 
     return '' \
