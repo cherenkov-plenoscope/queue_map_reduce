@@ -87,15 +87,11 @@ def _job_path(work_dir, idx):
 
 
 def _timestamp():
-    return time.strftime("%Y%m%d%H%M%S", time.gmtime())
-
-
-def _human_timestamp():
-    return time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
+    return time.strftime("%Y-%m-%d_%H-%M-%S", time.gmtime())
 
 
 def _print(msg):
-    print('{{"time": "{:s}", "msg": "{:s}"}}'.format(_human_timestamp(), msg,))
+    print('{{"time": "{:s}", "msg": "{:s}"}}'.format(_timestamp(), msg,))
 
 
 def _make_job_name(timestamp, idx):
