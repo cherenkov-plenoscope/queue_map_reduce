@@ -15,6 +15,8 @@ def _make_worker_node_script(module_name, function_name):
         'from {module_name:s} import {function_name:s}\n' \
         'import pickle\n' \
         'import sys\n' \
+        'import os\n' \
+        'os.environ["LD_LIBRARY_PATH"] = "/usr/local/Packages/gcc-7.2.0/lib64:/usr/local/Packages/gcc-7.2.0/lib:"\n' \
         '\n' \
         '\n' \
         'assert(len(sys.argv) == 2)\n' \
