@@ -379,7 +379,7 @@ def map(
 
             if verbose:
                 _print(
-                    "{:d} running, {:d} pending {:d} error {:d} lost".format(
+                    "{: 4d} running, {: 4d} pending, {: 4d} error, {: 4d} lost".format(
                         num_running, num_pending, num_error, num_lost,
                     )
                 )
@@ -392,11 +392,11 @@ def map(
                     num_resubmissions_by_idx[idx] = 0
 
                 _print(
-                    "ERROR JB_name {:s} JB_job_number {:s} idx {:09d}".format(
+                    "ERROR JB_name {:s}, JB_job_number {:s}, idx {:09d}".format(
                         job["JB_name"], job["JB_job_number"], idx
                     )
                 )
-                _print("qdel {:s}".format(job["JB_job_number"]))
+                _print("qdel JB_job_number {:s}".format(job["JB_job_number"]))
                 _qdel(
                     JB_job_number=job["JB_job_number"], qdel_path=qdel_path,
                 )
