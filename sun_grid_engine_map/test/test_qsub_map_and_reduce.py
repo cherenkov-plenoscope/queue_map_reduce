@@ -27,7 +27,9 @@ def test_make_worker_node_script():
             f.write(pickle.dumps(work))
         s = qmr._make_worker_node_script(
             module_name=function.__module__,
-            function_name=function.__name__)
+            function_name=function.__name__,
+            environ={},
+        )
         with open(os.path.join(tmp, 'worker_node_script.py'), "wt") as f:
             f.write(s)
         rc = subprocess.call([
