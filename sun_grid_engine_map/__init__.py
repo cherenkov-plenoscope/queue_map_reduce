@@ -155,7 +155,7 @@ def _qdel(JB_job_number, qdel_path):
         except KeyboardInterrupt:
             raise
         except Exception as bad:
-            _log(bad)
+            print(bad)
             time.sleep(1)
 
 
