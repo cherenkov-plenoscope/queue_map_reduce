@@ -29,8 +29,6 @@ def test_run():
     This tests if qmr.map can recover this error using 10 trials.
     """
     with tempfile.TemporaryDirectory(prefix='sge') as tmp_dir:
-        tmp_dir = "runp"
-        os.makedirs(tmp_dir, exist_ok=True)
         qsub_tmp_dir = os.path.join(tmp_dir, "qsub_tmp")
 
         if os.path.exists(tmp_state_path):
