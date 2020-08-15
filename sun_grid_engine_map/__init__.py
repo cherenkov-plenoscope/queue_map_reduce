@@ -148,7 +148,6 @@ def map(
     verbose=True,
     work_dir=None,
     keep_work_dir=False,
-    additional_environment={},
 ):
     """
     Maps jobs to a function for embarrassingly parallel processing on a qsub
