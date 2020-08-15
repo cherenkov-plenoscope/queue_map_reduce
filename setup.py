@@ -14,8 +14,7 @@ setuptools.setup(
     url='https://github.com/cherenkov-plenoscope/sun_grid_engine_map',
     packages=setuptools.find_packages(),
     install_requires=[
-        'xmltodict',
-        'qstat',
+        'qstat>=0.0.5',
     ],
     classifiers=[
         "Programming Language :: Python :: 3",
