@@ -120,8 +120,11 @@ def _times_iso8601():
 
 
 def _log(msg, flavor="msg"):
-    print('{{"time": "{:s}", "{:s}": "{:s}"}}'.format(
-        _times_iso8601(), flavor, msg,))
+    print(
+        '{{"time": "{:s}", "{:s}": "{:s}"}}'.format(
+            _times_iso8601(), flavor, msg,
+        )
+    )
 
 
 def _make_JB_name(session_id, idx):
