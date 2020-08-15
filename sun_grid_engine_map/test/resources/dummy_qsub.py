@@ -22,7 +22,7 @@ assert len(args.script_args) == 2
 
 tmp_path = pkg_resources.resource_filename(
     'sun_grid_engine_map',
-    os.path.join('test', 'resources', 'tmp_qsub.json')
+    os.path.join('test', 'resources', '_tmp_qsub_state.json')
 )
 
 if not os.path.exists(tmp_path):

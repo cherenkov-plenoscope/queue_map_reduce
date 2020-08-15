@@ -10,7 +10,7 @@ def _tmp_path(name):
         os.path.join('test', 'resources', name)
     )
 
-tmp_state_path = _tmp_path('tmp_qsub.json')
+tmp_state_path = _tmp_path('_tmp_qsub_state.json')
 qsub_path = _tmp_path('dummy_qsub.py')
 qstat_path = _tmp_path('dummy_qstat.py')
 qdel_path = _tmp_path('dummy_qdel.py')
