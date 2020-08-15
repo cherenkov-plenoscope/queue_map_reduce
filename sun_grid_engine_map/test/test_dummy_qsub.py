@@ -23,7 +23,11 @@ def test_dummys_exist():
 
 
 def test_run():
-
+    """
+    The dummy_qsub will run the jobs.
+    It will intentionally bring idx == 13 into error-state 'E' five times.
+    This tests if qmr.map can recover this error using 10 trials.
+    """
     with tempfile.TemporaryDirectory(prefix='sge') as tmp_dir:
         tmp_dir = "runp"
         os.makedirs(tmp_dir, exist_ok=True)
@@ -51,3 +55,6 @@ def test_run():
             qdel_path=qdel_path,
             error_state_indicator='E',
         )
+
+        for i in range(NUM_JOBS):
+            assert results[i] == np.sum(jobs[i])
