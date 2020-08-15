@@ -110,12 +110,18 @@ def _job_path(work_dir, idx):
     return os.path.abspath(os.path.join(work_dir, "{:09d}.pkl".format(idx)))
 
 
-def _timestamp():
+def _session_id_from_time_now():
+    # This must be a valid filename.
     return time.strftime("%Y-%m-%d_%H-%M-%S", time.gmtime())
 
 
-def _log(msg):
-    print('{{"time": "{:s}", "msg": "{:s}"}}'.format(_timestamp(), msg,))
+def _times_iso8601():
+    return time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
+
+
+def _log(msg, flavor="msg"):
+    print('{{"time": "{:s}", "{:s}": "{:s}"}}'.format(
+        _times_iso8601(), flavor, msg,))
 
 
 def _make_JB_name(session_id, idx):
@@ -142,8 +148,8 @@ def __qdel(JB_job_number, qdel_path):
             [qdel_path, str(JB_job_number)], stderr=subprocess.STDOUT,
         )
     except subprocess.CalledProcessError as e:
-        _log("qdel returncode: {:s}".format(e.returncode))
-        _log("qdel stdout: {:s}".format(e.output))
+        _log("qdel returncode: {:s}".format(e.returncode), flavor="error")
+        _log("qdel stdout: {:s}".format(e.output), flavor="error")
         raise
 
 
@@ -172,7 +178,7 @@ def _qstat(qstat_path):
         except KeyboardInterrupt:
             raise
         except Exception as bad:
-            _log("ERROR in qstat.")
+            _log("Problem in qstat", flavor="error")
             print(bad)
             time.sleep(1)
     return running, pending
@@ -288,7 +294,7 @@ def map(
         function=numpy.sum,
         jobs=[numpy.arange(i, 100+i) for i in range(10)])
     """
-    session_id = _timestamp()
+    session_id = _session_id_from_time_now()
     if work_dir is None:
         work_dir = os.path.abspath(os.path.join(".", ".qsub_" + session_id))
 
@@ -392,9 +398,10 @@ def map(
                     num_resubmissions_by_idx[idx] = 0
 
                 _log(
-                    "ERROR JB_name {:s}, JB_job_number {:s}, idx {:09d}".format(
+                    "JB_name {:s}, JB_job_number {:s}, idx {:09d}".format(
                         job["JB_name"], job["JB_job_number"], idx
-                    )
+                    ),
+                    flavor="error",
                 )
                 _log("qdel JB_job_number {:s}".format(job["JB_job_number"]))
                 _qdel(
@@ -441,14 +448,14 @@ def map(
                 result = pickle.loads(f.read())
             results.append(result)
         except FileNotFoundError:
-            _log("ERROR. No result {:s}".format(result_path))
+            _log("No result {:s}".format(result_path), flavor="error")
             results.append(None)
 
     if (
         _has_non_zero_stderrs(work_dir=work_dir, num_jobs=len(jobs))
         or keep_work_dir
     ):
-        _log("Found stderr.")
+        _log("Found stderr.", flavor="error")
         _log("Keep work dir: {:s}".format(work_dir))
     else:
         shutil.rmtree(work_dir)
