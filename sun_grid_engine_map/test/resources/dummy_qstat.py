@@ -9,47 +9,48 @@ import sun_grid_engine_map as qmr
 
 
 def job_to_xml(job):
-    jld = ''
+    jld = ""
     jld += '<job_list state="{:s}">\n'.format(job["@state"])
-    jld += '    <JB_job_number>{:s}</JB_job_number>\n'.format(
-        job["JB_job_number"])
-    jld += '    <JAT_prio>{:s}</JAT_prio>\n'.format(job["JAT_prio"])
-    jld += '    <JB_name>{:s}</JB_name>\n'.format(job["JB_name"])
-    jld += '    <JB_owner>{:s}</JB_owner>\n'.format(job["JB_owner"])
-    jld += '    <state>{:s}</state>\n'.format(job["state"])
-    jld += '    <JB_submission_time>{:s}</JB_submission_time>\n'.format(
-        job["JB_submission_time"])
-    jld += '    <queue_name>{:s}</queue_name>\n'.format(job["queue_name"])
-    jld += '    <slots>{:s}</slots>\n'.format(job["slots"])
-    jld += '</job_list>\n'
+    jld += "    <JB_job_number>{:s}</JB_job_number>\n".format(
+        job["JB_job_number"]
+    )
+    jld += "    <JAT_prio>{:s}</JAT_prio>\n".format(job["JAT_prio"])
+    jld += "    <JB_name>{:s}</JB_name>\n".format(job["JB_name"])
+    jld += "    <JB_owner>{:s}</JB_owner>\n".format(job["JB_owner"])
+    jld += "    <state>{:s}</state>\n".format(job["state"])
+    jld += "    <JB_submission_time>{:s}</JB_submission_time>\n".format(
+        job["JB_submission_time"]
+    )
+    jld += "    <queue_name>{:s}</queue_name>\n".format(job["queue_name"])
+    jld += "    <slots>{:s}</slots>\n".format(job["slots"])
+    jld += "</job_list>\n"
     return jld
 
 
 def state_to_xml(state):
     out_xml = "<?xml version='1.0'?>\n"
-    out_xml += '<job_info>\n'
+    out_xml += "<job_info>\n"
 
-    out_xml += '    <queue_info>\n'
-    for job in state['running']:
+    out_xml += "    <queue_info>\n"
+    for job in state["running"]:
         out_xml += indent_text(job_to_xml(job), indent=8)
-    out_xml += '    </queue_info>\n'
+    out_xml += "    </queue_info>\n"
 
-    out_xml += '    <job_info>\n'
-    for job in state['pending']:
+    out_xml += "    <job_info>\n"
+    for job in state["pending"]:
         out_xml += indent_text(job_to_xml(job), indent=8)
-    out_xml += '    </job_info>\n'
+    out_xml += "    </job_info>\n"
 
-    out_xml += '</job_info>\n'
+    out_xml += "</job_info>\n"
     return out_xml
 
 
 def indent_text(text, indent=4):
     out = []
-    spaces = " "*indent
+    spaces = " " * indent
     for line in text.splitlines():
         out.append(spaces + line + "\n")
-    return ''.join(out)
-
+    return "".join(out)
 
 
 def actually_run_the_job(job):
@@ -60,16 +61,17 @@ def actually_run_the_job(job):
             stderr=e,
         )
 
+
 # dummy qstat
 # ===========
 # Every time dummy qsub is called, it runs one job.
 
-assert(len(sys.argv) == 2)
+assert len(sys.argv) == 2
 assert sys.argv[1] == "-xml"
 
 tmp_path = pkg_resources.resource_filename(
-    'sun_grid_engine_map',
-    os.path.join('test', 'resources', '_tmp_qsub_state.json')
+    "sun_grid_engine_map",
+    os.path.join("test", "resources", "_tmp_qsub_state.json"),
 )
 
 with open(tmp_path, "rt") as f:
