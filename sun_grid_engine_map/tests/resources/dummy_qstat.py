@@ -71,7 +71,7 @@ assert sys.argv[1] == "-xml"
 
 tmp_path = pkg_resources.resource_filename(
     "sun_grid_engine_map",
-    os.path.join("test", "resources", "_tmp_qsub_state.json"),
+    os.path.join("tests", "resources", "_tmp_qsub_state.json"),
 )
 
 with open(tmp_path, "rt") as f:

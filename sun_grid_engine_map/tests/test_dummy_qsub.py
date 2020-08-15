@@ -7,7 +7,7 @@ import pkg_resources
 
 def _tmp_path(name):
     return pkg_resources.resource_filename(
-        "sun_grid_engine_map", os.path.join("test", "resources", name)
+        "sun_grid_engine_map", os.path.join("tests", "resources", name)
     )
 
 
