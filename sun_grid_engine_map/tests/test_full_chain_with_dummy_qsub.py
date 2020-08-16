@@ -12,26 +12,26 @@ def _tmp_path(name):
     )
 
 
-tmp_qsub_state_path = _tmp_path("_tmp_qsub_state.json")
-qsub_path = _tmp_path("dummy_qsub.py")
-qstat_path = _tmp_path("dummy_qstat.py")
-qdel_path = _tmp_path("dummy_qdel.py")
+dummy_queue_state_path = _tmp_path("dummy_queue_state.json")
+dummy_qsub_path = _tmp_path("dummy_qsub.py")
+dummy_qstat_path = _tmp_path("dummy_qstat.py")
+dummy_qdel_path = _tmp_path("dummy_qdel.py")
 
 
 def test_dummys_exist():
-    assert os.path.exists(qsub_path)
-    assert os.path.exists(qstat_path)
-    assert os.path.exists(qdel_path)
+    assert os.path.exists(dummy_qsub_path)
+    assert os.path.exists(dummy_qstat_path)
+    assert os.path.exists(dummy_qdel_path)
 
 
-def init_dummy_qsub_state(path, evil_jobs=[]):
+def init_dummy_queue_state(path, evil_jobs=[]):
     with open(path, "wt") as f:
         f.write(
             json.dumps({"running": [], "pending": [], "evil_jobs": evil_jobs})
         )
 
 
-def test_run():
+def test_run_with_failing_job():
     """
     The dummy_qsub will run the jobs.
     It will intentionally bring idx == 13 into error-state 'E' five times.
@@ -40,8 +40,8 @@ def test_run():
     with tempfile.TemporaryDirectory(prefix="sge") as tmp_dir:
         qsub_tmp_dir = os.path.join(tmp_dir, "qsub_tmp")
 
-        init_dummy_qsub_state(
-            path=tmp_qsub_state_path,
+        init_dummy_queue_state(
+            path=dummy_queue_state_path,
             evil_jobs=[{"idx": 13, "num_fails": 0, "max_num_fails": 5}],
         )
 
@@ -59,9 +59,9 @@ def test_run():
             work_dir=qsub_tmp_dir,
             keep_work_dir=True,
             max_num_resubmissions=10,
-            qsub_path=qsub_path,
-            qstat_path=qstat_path,
-            qdel_path=qdel_path,
+            qsub_path=dummy_qsub_path,
+            qstat_path=dummy_qstat_path,
+            qdel_path=dummy_qdel_path,
             error_state_indicator="E",
         )
 
