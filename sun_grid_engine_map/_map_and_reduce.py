@@ -10,6 +10,25 @@ import json
 
 
 def _make_worker_node_script(module_name, function_name, environ):
+    """
+    Returns a string that is a python-script.
+    This python-script will be executed on the worker-node.
+    In here, the environment variables are set explicitly.
+    It reads the job, runs result = function(job), and writes the result.
+    The script will be called on the worker-node with a single argument:
+
+    python script.py /some/path/.qsub_YYYY-mm-dd_HH-MM-SS/000000123.pkl
+
+    On environment-variables
+    ------------------------
+    There is the '-V' option in qsub which is meant to export ALL environment-
+    variables in the batch-job's context. And on many clusters this works fine.
+    However, I encountered clusters where this does not work.
+    For example ```LD_LIBRARY_PATH``` is often forced to be empty for reasons
+    of security. So the admins say.
+    This is why we set the einvironment-variables here in the
+    worker-node-script.
+    """
     add_environ = ""
     for key in environ:
         add_environ += 'os.environ["{key:s}"] = "{value:s}"\n'.format(
