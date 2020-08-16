@@ -124,7 +124,9 @@ def _log(*args, **kwargs):
     # json-line
     msg = " ".join(map(str, args))
     msg = msg.encode("unicode_escape").decode()
-    print('{"time": "'+_time_iso8601()+'", "msg": "'+msg+'"}', **kwargs)
+    print(
+        '{"time": "' + _time_iso8601() + '", "msg": "' + msg + '"}', **kwargs
+    )
 
 
 def _make_path_executable(path):
