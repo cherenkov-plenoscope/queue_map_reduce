@@ -6,6 +6,7 @@ import os
 import pkg_resources
 import json
 
+
 def test_dummys_exist():
     assert os.path.exists(dummy.QSUB_PATH)
     assert os.path.exists(dummy.QSTAT_PATH)

@@ -461,7 +461,9 @@ def map(
             if jobs_error:
                 _write_text_to_path(
                     text=json.dumps(num_resubmissions_by_idx, indent=4),
-                    path=os.path.join(work_dir, "num_resubmissions_by_idx.json"),
+                    path=os.path.join(
+                        work_dir, "num_resubmissions_by_idx.json"
+                    ),
                 )
 
             if num_running == 0 and num_pending == 0:

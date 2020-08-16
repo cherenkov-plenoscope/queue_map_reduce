@@ -11,6 +11,7 @@ def resource_path(name):
         "sun_grid_engine_map", os.path.join("tests", "resources", name)
     )
 
+
 QUEUE_STATE_PATH = resource_path("dummy_queue_state.json")
 QSUB_PATH = resource_path("dummy_qsub.py")
 QSTAT_PATH = resource_path("dummy_qstat.py")
