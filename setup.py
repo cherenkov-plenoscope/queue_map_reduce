@@ -6,7 +6,7 @@ with open("README.md", "r") as f:
 
 setuptools.setup(
     name="sun_grid_engine_map",
-    version="1.0.0",
+    version="1.0.1",
     author="Sebastian Achim Mueller",
     author_email="sebastian-achim.mueller@mpi-hd.mpg.de",
     description="Map and reduce for qsub.",
