@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
-import os
 import sys
 import json
-import pkg_resources
 import datetime
 import subprocess
 import sun_grid_engine_map as qmr
