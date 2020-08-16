@@ -426,7 +426,7 @@ def map(
                 if idx in num_resubmissions_by_idx:
                     num_resubmissions_by_idx[idx] += 1
                 else:
-                    num_resubmissions_by_idx[idx] = 0
+                    num_resubmissions_by_idx[idx] = 1
 
                 _log(
                     "JB_name {:s}, JB_job_number {:s}, idx {:09d}".format(
@@ -439,10 +439,10 @@ def map(
                     JB_job_number=job["JB_job_number"], qdel_path=qdel_path,
                 )
 
-                if num_resubmissions_by_idx[idx] < max_num_resubmissions:
+                if num_resubmissions_by_idx[idx] <= max_num_resubmissions:
                     _log(
                         "resubmit {:d} of {:d}, JB_name {:s}".format(
-                            num_resubmissions_by_idx[idx] + 1,
+                            num_resubmissions_by_idx[idx],
                             max_num_resubmissions,
                             job["JB_name"],
                         )
