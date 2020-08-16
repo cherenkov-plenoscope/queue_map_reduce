@@ -17,6 +17,3 @@ results = qmr.map(
 - The ```function``` must be part of an importable python module.
 - ```qstat```
 - The SUN-grid-engine (SGE) qsub flavour. Currently this only works for SGE.
-
-## Fall back
-When no ```qsub``` can be found, the results are computed in serial on the local machine. This can be handy for testing as it gives the same results.

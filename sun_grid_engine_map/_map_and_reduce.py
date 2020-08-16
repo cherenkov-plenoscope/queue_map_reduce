@@ -107,24 +107,6 @@ def _qsub(
         raise
 
 
-def _local_sub(
-    qsub_path,
-    queue_name,
-    script_exe_path,
-    script_path,
-    arguments,
-    JB_name,
-    stdout_path,
-    stderr_path,
-):
-    cmd = [script_exe_path, script_path]
-    for argument in arguments:
-        cmd += [argument]
-    with open(stdout_path, "w") as fstdout:
-        with open(stderr_path, "w") as fstderr:
-            subprocess.call(cmd, stdout=fstdout, stderr=fstderr)
-
-
 def _job_path(work_dir, idx):
     return os.path.abspath(os.path.join(work_dir, "{:09d}.pkl".format(idx)))
 
@@ -291,9 +273,6 @@ def map(
     Both the jobs and results must be serializable using pickle.
     The function must be part of an installed python-module.
 
-    If qsub is not installed, map falls back to serial processing on the local
-    machine. This allows testing on machines without qsub.
-
     Parameters
     ----------
     function : function-pointer
@@ -331,17 +310,8 @@ def map(
     if work_dir is None:
         work_dir = os.path.abspath(os.path.join(".", ".qsub_" + session_id))
 
-    if os.path.exists(qsub_path):
-        QSUB = True
-    else:
-        QSUB = shutil.which(qsub_path) is not None
-
     if verbose:
         _log("Start map().")
-        if QSUB:
-            _log("Using {:s}.".format(qsub_path))
-        else:
-            _log("No {:s}. Falling back to serial.".format(qsub_path))
 
     os.makedirs(work_dir)
     if verbose:
@@ -371,14 +341,9 @@ def map(
     if verbose:
         _log("Submitt jobs.")
 
-    if QSUB:
-        submitter = _qsub
-    else:
-        submitter = _local_sub
-
     for JB_name in JB_names_in_session:
         idx = _idx_from_JB_name(JB_name)
-        submitter(
+        _qsub(
             qsub_path=qsub_path,
             queue_name=queue_name,
             script_exe_path=python_path,
@@ -392,87 +357,86 @@ def map(
     if verbose:
         _log("Wait for jobs to finish.")
 
-    if QSUB:
-        JB_names_in_session_set = set(JB_names_in_session)
-        still_running = True
-        num_resubmissions_by_idx = {}
-        while still_running:
-            (
-                jobs_running,
-                jobs_pending,
-                jobs_error,
-            ) = _jobs_running_pending_error(
-                JB_names_set=JB_names_in_session_set,
-                error_state_indicator=error_state_indicator,
-                qstat_path=qstat_path,
+    JB_names_in_session_set = set(JB_names_in_session)
+    still_running = True
+    num_resubmissions_by_idx = {}
+    while still_running:
+        (
+            jobs_running,
+            jobs_pending,
+            jobs_error,
+        ) = _jobs_running_pending_error(
+            JB_names_set=JB_names_in_session_set,
+            error_state_indicator=error_state_indicator,
+            qstat_path=qstat_path,
+        )
+        num_running = len(jobs_running)
+        num_pending = len(jobs_pending)
+        num_error = len(jobs_error)
+        num_lost = 0
+        for idx in num_resubmissions_by_idx:
+            if num_resubmissions_by_idx[idx] >= max_num_resubmissions:
+                num_lost += 1
+
+        if verbose:
+            _log(
+                "{: 4d} running, {: 4d} pending, {: 4d} error, {: 4d} lost".format(
+                    num_running, num_pending, num_error, num_lost,
+                )
             )
-            num_running = len(jobs_running)
-            num_pending = len(jobs_pending)
-            num_error = len(jobs_error)
-            num_lost = 0
-            for idx in num_resubmissions_by_idx:
-                if num_resubmissions_by_idx[idx] >= max_num_resubmissions:
-                    num_lost += 1
 
-            if verbose:
+        for job in jobs_error:
+            idx = _idx_from_JB_name(job["JB_name"])
+            if idx in num_resubmissions_by_idx:
+                num_resubmissions_by_idx[idx] += 1
+            else:
+                num_resubmissions_by_idx[idx] = 1
+
+            _log(
+                "JB_name {:s}, JB_job_number {:s}, idx {:09d}".format(
+                    job["JB_name"], job["JB_job_number"], idx
+                ),
+                flavor="error",
+            )
+            _log("qdel JB_job_number {:s}".format(job["JB_job_number"]))
+            _qdel(
+                JB_job_number=job["JB_job_number"], qdel_path=qdel_path,
+            )
+
+            if num_resubmissions_by_idx[idx] <= max_num_resubmissions:
                 _log(
-                    "{: 4d} running, {: 4d} pending, {: 4d} error, {: 4d} lost".format(
-                        num_running, num_pending, num_error, num_lost,
+                    "resubmit {:d} of {:d}, JB_name {:s}".format(
+                        num_resubmissions_by_idx[idx],
+                        max_num_resubmissions,
+                        job["JB_name"],
                     )
                 )
-
-            for job in jobs_error:
-                idx = _idx_from_JB_name(job["JB_name"])
-                if idx in num_resubmissions_by_idx:
-                    num_resubmissions_by_idx[idx] += 1
-                else:
-                    num_resubmissions_by_idx[idx] = 1
-
-                _log(
-                    "JB_name {:s}, JB_job_number {:s}, idx {:09d}".format(
-                        job["JB_name"], job["JB_job_number"], idx
-                    ),
-                    flavor="error",
-                )
-                _log("qdel JB_job_number {:s}".format(job["JB_job_number"]))
-                _qdel(
-                    JB_job_number=job["JB_job_number"], qdel_path=qdel_path,
+                _qsub(
+                    qsub_path=qsub_path,
+                    queue_name=queue_name,
+                    script_exe_path=python_path,
+                    script_path=script_path,
+                    arguments=[_job_path(work_dir, idx)],
+                    JB_name=job["JB_name"],
+                    stdout_path=_job_path(work_dir, idx) + ".o",
+                    stderr_path=_job_path(work_dir, idx) + ".e",
                 )
 
-                if num_resubmissions_by_idx[idx] <= max_num_resubmissions:
-                    _log(
-                        "resubmit {:d} of {:d}, JB_name {:s}".format(
-                            num_resubmissions_by_idx[idx],
-                            max_num_resubmissions,
-                            job["JB_name"],
-                        )
-                    )
-                    submitter(
-                        qsub_path=qsub_path,
-                        queue_name=queue_name,
-                        script_exe_path=python_path,
-                        script_path=script_path,
-                        arguments=[_job_path(work_dir, idx)],
-                        JB_name=job["JB_name"],
-                        stdout_path=_job_path(work_dir, idx) + ".o",
-                        stderr_path=_job_path(work_dir, idx) + ".e",
-                    )
+        if jobs_error:
+            _write_text_to_path(
+                text=json.dumps(num_resubmissions_by_idx, indent=4),
+                path=os.path.join(
+                    work_dir, "num_resubmissions_by_idx.json"
+                ),
+            )
 
-            if jobs_error:
-                _write_text_to_path(
-                    text=json.dumps(num_resubmissions_by_idx, indent=4),
-                    path=os.path.join(
-                        work_dir, "num_resubmissions_by_idx.json"
-                    ),
-                )
+        if num_running == 0 and num_pending == 0:
+            still_running = False
 
-            if num_running == 0 and num_pending == 0:
-                still_running = False
-
-            time.sleep(polling_interval_qstat)
+        time.sleep(polling_interval_qstat)
 
     if verbose:
-        _log("Collect results.")
+            _log("Collect results.")
 
     results = []
     for idx, job in enumerate(jobs):
