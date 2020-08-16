@@ -45,14 +45,14 @@ def _make_worker_node_script(module_name, function_name, environ):
 
 
 def _qsub(
+    qsub_path,
+    queue_name,
     script_exe_path,
     script_path,
     arguments,
     JB_name,
     stdout_path,
     stderr_path,
-    queue_name=None,
-    qsub_path="qsub",
 ):
     cmd = [qsub_path]
     if queue_name:
@@ -89,14 +89,14 @@ def _qsub(
 
 
 def _local_sub(
+    qsub_path,
+    queue_name,
     script_exe_path,
     script_path,
     arguments,
     JB_name,
     stdout_path,
     stderr_path,
-    queue_name=None,
-    qsub_path="",
 ):
     cmd = [script_exe_path, script_path]
     for argument in arguments:
@@ -196,7 +196,7 @@ def _filter_jobs_by_JB_name(jobs, JB_names_set):
 
 
 def _extract_error_from_running_pending(
-    jobs_running, jobs_pending, error_state_indicator="E"
+    jobs_running, jobs_pending, error_state_indicator
 ):
     # split into runnning, pending, and error
     _running = []
@@ -219,7 +219,7 @@ def _extract_error_from_running_pending(
 
 
 def _jobs_running_pending_error(
-    JB_names_set, error_state_indicator="E", qstat_path="qstat"
+    JB_names_set, error_state_indicator, qstat_path
 ):
     all_jobs_running, all_jobs_pending = _qstat(qstat_path=qstat_path)
     jobs_running = _filter_jobs_by_JB_name(all_jobs_running, JB_names_set)
@@ -351,14 +351,14 @@ def map(
     for JB_name in JB_names_in_session:
         idx = _idx_from_JB_name(JB_name)
         submitter(
+            qsub_path=qsub_path,
+            queue_name=queue_name,
             script_exe_path=python_path,
             script_path=script_path,
             arguments=[_job_path(work_dir, idx)],
             JB_name=JB_name,
-            queue_name=queue_name,
             stdout_path=_job_path(work_dir, idx) + ".o",
             stderr_path=_job_path(work_dir, idx) + ".e",
-            qsub_path=qsub_path,
         )
 
     if verbose:
@@ -420,14 +420,14 @@ def map(
                         )
                     )
                     submitter(
+                        qsub_path=qsub_path,
+                        queue_name=queue_name,
                         script_exe_path=python_path,
                         script_path=script_path,
                         arguments=[_job_path(work_dir, idx)],
                         JB_name=job["JB_name"],
-                        queue_name=queue_name,
                         stdout_path=_job_path(work_dir, idx) + ".o",
                         stderr_path=_job_path(work_dir, idx) + ".e",
-                        qsub_path=qsub_path,
                     )
 
             if jobs_error:
