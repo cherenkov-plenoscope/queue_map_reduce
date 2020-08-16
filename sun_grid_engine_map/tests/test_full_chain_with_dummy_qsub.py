@@ -3,6 +3,7 @@ import numpy as np
 import tempfile
 import os
 import pkg_resources
+import json
 
 
 def _tmp_path(name):
@@ -11,7 +12,7 @@ def _tmp_path(name):
     )
 
 
-tmp_state_path = _tmp_path("_tmp_qsub_state.json")
+tmp_qsub_state_path = _tmp_path("_tmp_qsub_state.json")
 qsub_path = _tmp_path("dummy_qsub.py")
 qstat_path = _tmp_path("dummy_qstat.py")
 qdel_path = _tmp_path("dummy_qdel.py")
@@ -23,6 +24,13 @@ def test_dummys_exist():
     assert os.path.exists(qdel_path)
 
 
+def init_dummy_qsub_state(path, evil_jobs=[]):
+    with open(path, "wt") as f:
+        f.write(
+            json.dumps({"running": [], "pending": [], "evil_jobs": evil_jobs})
+        )
+
+
 def test_run():
     """
     The dummy_qsub will run the jobs.
@@ -32,8 +40,10 @@ def test_run():
     with tempfile.TemporaryDirectory(prefix="sge") as tmp_dir:
         qsub_tmp_dir = os.path.join(tmp_dir, "qsub_tmp")
 
-        if os.path.exists(tmp_state_path):
-            os.remove(tmp_state_path)
+        init_dummy_qsub_state(
+            path=tmp_qsub_state_path,
+            evil_jobs=[{"idx": 13, "num_fails": 0, "max_num_fails": 5}],
+        )
 
         NUM_JOBS = 30
 

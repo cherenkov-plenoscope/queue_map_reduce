@@ -65,6 +65,7 @@ def actually_run_the_job(job):
 # dummy qstat
 # ===========
 # Every time dummy qsub is called, it runs one job.
+MAX_NUM_RUNNING = 10
 
 assert len(sys.argv) == 2
 assert sys.argv[1] == "-xml"
@@ -77,21 +78,25 @@ tmp_path = pkg_resources.resource_filename(
 with open(tmp_path, "rt") as f:
     state = json.loads(f.read())
 
-MAX_NUM_RUNNING = 10
-EVIL_JOB_IDX = 13
-MAX_NUM_FAILS_OF_EVIL_JOB = 5
+evil_idxs_num_fails = {}
+evil_idxs_max_num_fails = {}
+for evil in state["evil_jobs"]:
+    evil_idxs_num_fails[evil["idx"]] = evil["num_fails"]
+    evil_idxs_max_num_fails[evil["idx"]] = evil["max_num_fails"]
+
 
 if len(state["running"]) >= MAX_NUM_RUNNING:
     run_job = state["running"].pop(0)
     actually_run_the_job(run_job)
 elif len(state["pending"]) > 0:
     job = state["pending"].pop(0)
-    if qmr._map_and_reduce._idx_from_JB_name(job["JB_name"]) == EVIL_JOB_IDX:
-        if state["num_fails_of_evil_job"] <= MAX_NUM_FAILS_OF_EVIL_JOB:
+    idx = qmr._map_and_reduce._idx_from_JB_name(job["JB_name"])
+    if idx in evil_idxs_num_fails:
+        if evil_idxs_num_fails[idx] < evil_idxs_max_num_fails[idx]:
             job["@state"] = "?"
             job["state"] = "Eqw"
             state["pending"].append(job)
-            state["num_fails_of_evil_job"] += 1
+            evil_idxs_num_fails[idx] += 1
         else:
             job["@state"] = "running"
             job["state"] = "r"
@@ -103,6 +108,19 @@ elif len(state["pending"]) > 0:
 elif len(state["running"]) > 0:
     run_job = state["running"].pop(0)
     actually_run_the_job(run_job)
+
+
+evil_jobs = []
+for idx in evil_idxs_num_fails:
+    evil_jobs.append(
+        {
+            "idx": idx,
+            "num_fails": evil_idxs_num_fails[idx],
+            "max_num_fails": evil_idxs_max_num_fails[idx],
+        }
+    )
+state["evil_jobs"] = evil_jobs
+
 
 with open(tmp_path, "wt") as f:
     f.write(json.dumps(state, indent=4))

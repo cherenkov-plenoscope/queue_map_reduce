@@ -25,14 +25,6 @@ tmp_path = pkg_resources.resource_filename(
     os.path.join("tests", "resources", "_tmp_qsub_state.json"),
 )
 
-if not os.path.exists(tmp_path):
-    with open(tmp_path, "wt") as f:
-        f.write(
-            json.dumps(
-                {"running": [], "pending": [], "num_fails_of_evil_job": 0}
-            )
-        )
-
 with open(tmp_path, "rt") as f:
     state = json.loads(f.read())
 

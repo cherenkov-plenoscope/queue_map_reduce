@@ -22,7 +22,7 @@ found = False
 state = {
     "pending": [],
     "running": [],
-    "num_fails_of_evil_job": old_state["num_fails_of_evil_job"],
+    "evil_jobs": old_state["evil_jobs"],
 }
 for job in old_state["running"]:
     if job["JB_job_number"] == JB_job_number:
