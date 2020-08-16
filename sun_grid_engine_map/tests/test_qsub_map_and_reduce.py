@@ -1,4 +1,5 @@
 import sun_grid_engine_map._map_and_reduce as qmr
+from sun_grid_engine_map import _dummy_queue as dummy
 import pickle
 import numpy
 import tempfile
@@ -50,20 +51,35 @@ def test_full_chain():
     function = GOOD_FUNCTION
     jobs = GOOD_JOBS
 
-    results = qmr.map(function=function, jobs=jobs)
+    with tempfile.TemporaryDirectory(prefix="sge") as tmp:
+        dummy.init_queue_state(path=dummy.QUEUE_STATE_PATH)
+        results = qmr.map(
+            function=function,
+            jobs=jobs,
+            work_dir=os.path.join(tmp, "my_work_dir"),
+            polling_interval_qstat=1e-3,
+            qsub_path=dummy.QSUB_PATH,
+            qstat_path=dummy.QSTAT_PATH,
+            qdel_path=dummy.QDEL_PATH,
+        )
 
-    assert len(results) == NUM_JOBS
-    for i in range(NUM_JOBS):
-        assert results[i] == function(jobs[i])
+        assert len(results) == NUM_JOBS
+        for i in range(NUM_JOBS):
+            assert results[i] == function(jobs[i])
 
 
 def test_force_dump_tmp_dir():
     with tempfile.TemporaryDirectory(prefix="sge") as tmp:
+        dummy.init_queue_state(path=dummy.QUEUE_STATE_PATH)
         results = qmr.map(
             function=GOOD_FUNCTION,
             jobs=GOOD_JOBS,
             work_dir=os.path.join(tmp, "my_work_dir"),
             keep_work_dir=True,
+            polling_interval_qstat=1e-3,
+            qsub_path=dummy.QSUB_PATH,
+            qstat_path=dummy.QSTAT_PATH,
+            qdel_path=dummy.QDEL_PATH,
         )
 
         assert os.path.exists(os.path.join(tmp, "my_work_dir"))
@@ -71,10 +87,15 @@ def test_force_dump_tmp_dir():
 
 def test_bad_function_creating_stderr():
     with tempfile.TemporaryDirectory(prefix="sge") as tmp:
+        dummy.init_queue_state(path=dummy.QUEUE_STATE_PATH)
         results = qmr.map(
             function=BAD_FUNCTION,
             jobs=GOOD_JOBS,
             work_dir=os.path.join(tmp, "my_work_dir"),
+            polling_interval_qstat=1e-3,
+            qsub_path=dummy.QSUB_PATH,
+            qstat_path=dummy.QSTAT_PATH,
+            qdel_path=dummy.QDEL_PATH,
         )
 
         assert len(results) == NUM_JOBS
@@ -87,10 +108,16 @@ def test_one_bad_job_creating_stderr():
     with tempfile.TemporaryDirectory(prefix="sge") as tmp:
         bad_jobs = GOOD_JOBS.copy()
         bad_jobs.append("np.sum will not work for me.")
+
+        dummy.init_queue_state(path=dummy.QUEUE_STATE_PATH)
         results = qmr.map(
             function=GOOD_FUNCTION,
             jobs=bad_jobs,
             work_dir=os.path.join(tmp, "my_work_dir"),
+            polling_interval_qstat=1e-3,
+            qsub_path=dummy.QSUB_PATH,
+            qstat_path=dummy.QSTAT_PATH,
+            qdel_path=dummy.QDEL_PATH,
         )
 
         assert len(results) == NUM_JOBS + 1
@@ -101,8 +128,14 @@ def test_one_bad_job_creating_stderr():
 
 
 def test_minimal_example():
+    dummy.init_queue_state(path=dummy.QUEUE_STATE_PATH)
     results = qmr.map(
-        function=numpy.sum, jobs=[numpy.arange(i, 100 + i) for i in range(10)]
+        function=numpy.sum,
+        jobs=[numpy.arange(i, 100 + i) for i in range(10)],
+        polling_interval_qstat=1e-3,
+        qsub_path=dummy.QSUB_PATH,
+        qstat_path=dummy.QSTAT_PATH,
+        qdel_path=dummy.QDEL_PATH,
     )
 
     assert len(results) == 10
