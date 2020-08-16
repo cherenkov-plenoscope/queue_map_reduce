@@ -146,6 +146,16 @@ def _log(msg, flavor="msg"):
     )
 
 
+def _make_path_executable(path):
+    st = os.stat(path)
+    os.chmod(path, st.st_mode | stat.S_IEXEC)
+
+
+def _write_text_to_path(text, path):
+    with open(path, "wt") as f:
+        f.write(text)
+
+
 def _make_JB_name(session_id, idx):
     return "q{:s}#{:09d}".format(session_id, idx)
 
@@ -346,10 +356,8 @@ def map(
         environ=dict(os.environ),
     )
     script_path = os.path.join(work_dir, "worker_node_script.py")
-    with open(script_path, "wt") as f:
-        f.write(script_str)
-    st = os.stat(script_path)
-    os.chmod(script_path, st.st_mode | stat.S_IEXEC)
+    _write_text_to_path(text=script_str, path=script_path)
+    _make_path_executable(path=script_path)
 
     if verbose:
         _log("Write jobs.")
@@ -451,9 +459,10 @@ def map(
                     )
 
             if jobs_error:
-                resup = os.path.join(work_dir, "num_resubmissions_by_idx.json")
-                with open(resup, "wt") as f:
-                    f.write(json.dumps(num_resubmissions_by_idx, indent=4))
+                _write_text_to_path(
+                    text=json.dumps(num_resubmissions_by_idx, indent=4),
+                    path=os.path.join(work_dir, "num_resubmissions_by_idx.json"),
+                )
 
             if num_running == 0 and num_pending == 0:
                 still_running = False
