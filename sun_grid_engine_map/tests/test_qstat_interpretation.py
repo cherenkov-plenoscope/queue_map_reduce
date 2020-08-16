@@ -1,4 +1,4 @@
-import sun_grid_engine_map._map_and_reduce as qmr
+from sun_grid_engine_map import _map_and_reduce as _qmr
 import pickle
 import numpy
 import os
@@ -23,7 +23,7 @@ def test_filter_JB_name():
 
     my_JB_names_set = set(JB_names_of_my_jobs)
 
-    my_jobs = qmr._filter_jobs_by_JB_name(
+    my_jobs = _qmr._filter_jobs_by_JB_name(
         jobs=all_jobs, JB_names_set=my_JB_names_set,
     )
 
@@ -35,7 +35,7 @@ def test_filter_JB_name():
 def test_extract_error_state_no_errors():
     jobs_running = [{"state": "r"} for i in range(42)]
     jobs_pending = [{"state": "qw"} for i in range(1337)]
-    r, p, e = qmr._extract_error_from_running_pending(
+    r, p, e = _qmr._extract_error_from_running_pending(
         jobs_running=jobs_running,
         jobs_pending=jobs_pending,
         error_state_indicator="E",
@@ -65,7 +65,7 @@ def test_extract_error_state_with_errors():
         }
         jobs_pending.append(job)
 
-    r, p, e = qmr._extract_error_from_running_pending(
+    r, p, e = _qmr._extract_error_from_running_pending(
         jobs_running=jobs_running,
         jobs_pending=jobs_pending,
         error_state_indicator="E",
@@ -81,6 +81,6 @@ def test_job_name_idx():
         for i in range(1000)
     ]
     for idx in idxs:
-        JB_name = qmr._make_JB_name(session_id="hans", idx=idx)
-        idx_back = qmr._idx_from_JB_name(JB_name=JB_name)
+        JB_name = _qmr._make_JB_name(session_id="hans", idx=idx)
+        idx_back = _qmr._idx_from_JB_name(JB_name=JB_name)
         assert idx_back == idx

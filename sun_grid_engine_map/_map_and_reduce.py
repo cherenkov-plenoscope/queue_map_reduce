@@ -112,20 +112,19 @@ def _job_path(work_dir, idx):
 
 
 def _session_id_from_time_now():
-    # This must be a valid filename.
-    return time.strftime("%Y-%m-%d_%H-%M-%S", time.gmtime())
+    # This must be a valid filename. No ':' for time.
+    return time.strftime("%Y-%m-%dT%H-%M-%S", time.gmtime())
 
 
-def _times_iso8601():
+def _time_iso8601():
     return time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
 
 
-def _log(msg, flavor="msg"):
-    print(
-        '{{"time": "{:s}", "{:s}": "{:s}"}}'.format(
-            _times_iso8601(), flavor, msg,
-        )
-    )
+def _log(*args, **kwargs):
+    # json-line
+    msg = " ".join(map(str, args))
+    msg = msg.encode("unicode_escape").decode()
+    print('{"time": "'+_time_iso8601()+'", "msg": "'+msg+'"}', **kwargs)
 
 
 def _make_path_executable(path):
@@ -162,8 +161,8 @@ def __qdel(JB_job_number, qdel_path):
             [qdel_path, str(JB_job_number)], stderr=subprocess.STDOUT,
         )
     except subprocess.CalledProcessError as e:
-        _log("qdel returncode: {:s}".format(e.returncode), flavor="error")
-        _log("qdel stdout: {:s}".format(e.output), flavor="error")
+        _log("qdel returncode: {:s}".format(e.returncode))
+        _log("qdel stdout: {:s}".format(e.output))
         raise
 
 
@@ -175,7 +174,7 @@ def _qdel(JB_job_number, qdel_path):
         except KeyboardInterrupt:
             raise
         except Exception as bad:
-            _log("Problem in qdel", flavor="error")
+            _log("Problem in qdel")
             print(bad)
             time.sleep(1)
 
@@ -193,7 +192,7 @@ def _qstat(qstat_path):
         except KeyboardInterrupt:
             raise
         except Exception as bad:
-            _log("Problem in qstat", flavor="error")
+            _log("Problem in qstat")
             print(bad)
             time.sleep(1)
     return running, pending
@@ -243,13 +242,12 @@ def _jobs_running_pending_error(
     )
 
 
-def map(
+def map_and_reduce(
     function,
     jobs,
     queue_name=None,
     python_path=os.path.abspath(shutil.which("python")),
     polling_interval_qstat=5,
-    verbose=True,
     work_dir=None,
     keep_work_dir=False,
     max_num_resubmissions=10,
@@ -289,8 +287,6 @@ def map(
     polling_interval_qstat : float, optional
         The time in seconds to wait before polling qstat again while waiting
         for the jobs to finish.
-    verbose : bool, optional
-        Print to stdout.
     work_dir : string, optional
         The directory path where the jobs, the results and the
         worker-node-script is stored.
@@ -310,27 +306,23 @@ def map(
     if work_dir is None:
         work_dir = os.path.abspath(os.path.join(".", ".qsub_" + session_id))
 
-    if verbose:
-        _log("Start map().")
+    _log("Start map().")
 
     os.makedirs(work_dir)
-    if verbose:
-        _log("Tmp dir {:s}".format(work_dir))
+    _log("Session directory ", work_dir)
 
-    if verbose:
-        _log("Write worker node script.")
+    _log("Write worker node script.")
 
-    script_str = _make_worker_node_script(
+    worker_node_script_str = _make_worker_node_script(
         module_name=function.__module__,
         function_name=function.__name__,
         environ=dict(os.environ),
     )
     script_path = os.path.join(work_dir, "worker_node_script.py")
-    _write_text_to_path(text=script_str, path=script_path)
+    _write_text_to_path(text=worker_node_script_str, path=script_path)
     _make_path_executable(path=script_path)
 
-    if verbose:
-        _log("Write jobs.")
+    _log("Write jobs.")
     JB_names_in_session = []
     for idx, job in enumerate(jobs):
         JB_name = _make_JB_name(session_id=session_id, idx=idx)
@@ -338,8 +330,7 @@ def map(
         with open(_job_path(work_dir, idx), "wb") as f:
             f.write(pickle.dumps(job))
 
-    if verbose:
-        _log("Submitt jobs.")
+    _log("Submitt jobs.")
 
     for JB_name in JB_names_in_session:
         idx = _idx_from_JB_name(JB_name)
@@ -354,8 +345,7 @@ def map(
             stderr_path=_job_path(work_dir, idx) + ".e",
         )
 
-    if verbose:
-        _log("Wait for jobs to finish.")
+    _log("Wait for jobs to finish.")
 
     JB_names_in_session_set = set(JB_names_in_session)
     still_running = True
@@ -378,12 +368,11 @@ def map(
             if num_resubmissions_by_idx[idx] >= max_num_resubmissions:
                 num_lost += 1
 
-        if verbose:
-            _log(
-                "{: 4d} running, {: 4d} pending, {: 4d} error, {: 4d} lost".format(
-                    num_running, num_pending, num_error, num_lost,
-                )
+        _log(
+            "{: 4d} running, {: 4d} pending, {: 4d} error, {: 4d} lost".format(
+                num_running, num_pending, num_error, num_lost,
             )
+        )
 
         for job in jobs_error:
             idx = _idx_from_JB_name(job["JB_name"])
@@ -392,16 +381,13 @@ def map(
             else:
                 num_resubmissions_by_idx[idx] = 1
 
-            _log(
-                "JB_name {:s}, JB_job_number {:s}, idx {:09d}".format(
-                    job["JB_name"], job["JB_job_number"], idx
-                ),
-                flavor="error",
+            job_id_str = "JB_name {:s}, JB_job_number {:s}, idx {:09d}".format(
+                job["JB_name"], job["JB_job_number"], idx
             )
-            _log("qdel JB_job_number {:s}".format(job["JB_job_number"]))
-            _qdel(
-                JB_job_number=job["JB_job_number"], qdel_path=qdel_path,
-            )
+            _log("Error-state in ", job_id_str)
+            _log("qdel ", job_id_str)
+
+            _qdel(JB_job_number=job["JB_job_number"], qdel_path=qdel_path)
 
             if num_resubmissions_by_idx[idx] <= max_num_resubmissions:
                 _log(
@@ -433,8 +419,7 @@ def map(
 
         time.sleep(polling_interval_qstat)
 
-    if verbose:
-        _log("Collect results.")
+    _log("Collect results.")
 
     results = []
     for idx, job in enumerate(jobs):
@@ -444,19 +429,18 @@ def map(
                 result = pickle.loads(f.read())
             results.append(result)
         except FileNotFoundError:
-            _log("No result {:s}".format(result_path), flavor="error")
+            _log("No result ", result_path)
             results.append(None)
 
     if (
         _has_non_zero_stderrs(work_dir=work_dir, num_jobs=len(jobs))
         or keep_work_dir
     ):
-        _log("Found stderr.", flavor="error")
-        _log("Keep work dir: {:s}".format(work_dir))
+        _log("Found stderr.")
+        _log("Keep work dir: ", work_dir)
     else:
         shutil.rmtree(work_dir)
 
-    if verbose:
-        _log("Stop map().")
+    _log("Stop map().")
 
     return results

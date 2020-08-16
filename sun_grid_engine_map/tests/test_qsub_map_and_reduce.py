@@ -1,4 +1,5 @@
-import sun_grid_engine_map._map_and_reduce as qmr
+import sun_grid_engine_map as qmr
+from sun_grid_engine_map import _map_and_reduce as _qmr
 from sun_grid_engine_map import _dummy_queue as dummy
 import pickle
 import numpy
@@ -26,7 +27,7 @@ def test_make_worker_node_script():
         function = numpy.sum
         with open(os.path.join(tmp, "work.pkl"), "wb") as f:
             f.write(pickle.dumps(work))
-        s = qmr._make_worker_node_script(
+        s = _qmr._make_worker_node_script(
             module_name=function.__module__,
             function_name=function.__name__,
             environ={},
