@@ -1,4 +1,4 @@
-import sun_grid_engine_map as qmr
+import sun_grid_engine_map._map_and_reduce as qmr
 import pickle
 import numpy
 import tempfile

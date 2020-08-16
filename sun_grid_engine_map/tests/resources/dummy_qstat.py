@@ -86,7 +86,7 @@ if len(state["running"]) >= MAX_NUM_RUNNING:
     actually_run_the_job(run_job)
 elif len(state["pending"]) > 0:
     job = state["pending"].pop(0)
-    if qmr._idx_from_JB_name(job["JB_name"]) == EVIL_JOB_IDX:
+    if qmr._map_and_reduce._idx_from_JB_name(job["JB_name"]) == EVIL_JOB_IDX:
         if state["num_fails_of_evil_job"] <= MAX_NUM_FAILS_OF_EVIL_JOB:
             job["@state"] = "?"
             job["state"] = "Eqw"
