@@ -24,6 +24,7 @@ setuptools.setup(
         "Operating System :: Unix",
         "Natural Language :: English",
         "Topic :: System :: Distributed Computing",
+        "Topic :: System :: Clustering",
     ],
     python_requires=">=3",
 )
