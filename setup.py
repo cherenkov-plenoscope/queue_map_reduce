@@ -11,6 +11,7 @@ setuptools.setup(
     author_email="sebastian-achim.mueller@mpi-hd.mpg.de",
     description="Map and reduce for qsub.",
     long_description=long_description,
+    long_description_content_type="text/x-rst",
     url="https://github.com/cherenkov-plenoscope/sun_grid_engine_map",
     packages=setuptools.find_packages(),
     package_data={
