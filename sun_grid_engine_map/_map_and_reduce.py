@@ -90,9 +90,6 @@ def _qsub(
         JB_name,
     ]
     cmd += [
-        "-V",
-    ]  # export enivronment variables to worker node
-    cmd += [
         "-S",
         script_exe_path,
     ]
