@@ -300,14 +300,22 @@ def map_and_reduce(
     -------
     results = map(
         function=numpy.sum,
-        jobs=[numpy.arange(i, 100+i) for i in range(10)])
+        jobs=[numpy.arange(i, 100+i) for i in range(10)]
+    )
     """
     session_id = _session_id_from_time_now()
     if work_dir is None:
         work_dir = os.path.abspath(os.path.join(".", ".qsub_" + session_id))
 
     _log("Start map()")
-
+    _log("qsub_path:  ", qsub_path)
+    _log("qstat_path: ", qstat_path)
+    _log("qdel_path:  ", qdel_path)
+    _log("queue_name: ", queue_name)
+    _log("python_path: ", python_path)
+    _log("polling-interval for qstat: ", polling_interval_qstat, "s")
+    _log("max. num. resubmissions: ", max_num_resubmissions)
+    _log("error-state-indicator: ", error_state_indicator)
     _log("Making work_dir ", work_dir)
     os.makedirs(work_dir)
 
