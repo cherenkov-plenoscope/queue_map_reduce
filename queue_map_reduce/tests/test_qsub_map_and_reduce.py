@@ -1,5 +1,5 @@
 import queue_map_reduce as qmr
-from queue_map_reduce import _map_and_reduce as _qmr
+from queue_map_reduce import tools as qmr_tools
 from queue_map_reduce import dummy_queue as dummy
 import pickle
 import numpy
@@ -27,7 +27,7 @@ def test_make_worker_node_script():
         function = numpy.sum
         with open(os.path.join(tmp, "work.pkl"), "wb") as f:
             f.write(pickle.dumps(work))
-        s = _qmr._make_worker_node_script(
+        s = qmr_tools._make_worker_node_script(
             module_name=function.__module__,
             function_name=function.__name__,
             environ={},
