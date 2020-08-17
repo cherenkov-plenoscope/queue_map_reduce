@@ -3,7 +3,7 @@ import argparse
 import json
 import datetime
 import sys
-from sun_grid_engine_map import _dummy_queue as dummy
+from sun_grid_engine_map import dummy_queue
 
 
 # dummy qsub
@@ -20,7 +20,7 @@ args = parser.parse_args()
 
 assert len(args.script_args) == 2
 
-with open(dummy.QUEUE_STATE_PATH, "rt") as f:
+with open(dummy_queue.QUEUE_STATE_PATH, "rt") as f:
     state = json.loads(f.read())
 
 now = datetime.datetime.now()
@@ -45,7 +45,7 @@ job = {
 
 state["pending"].append(job)
 
-with open(dummy.QUEUE_STATE_PATH, "wt") as f:
+with open(dummy_queue.QUEUE_STATE_PATH, "wt") as f:
     f.write(json.dumps(state, indent=4))
 
 sys.exit(0)

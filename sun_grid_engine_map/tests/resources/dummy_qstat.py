@@ -4,7 +4,7 @@ import json
 import datetime
 import subprocess
 import sun_grid_engine_map as qmr
-from sun_grid_engine_map import _dummy_queue as dummy
+from sun_grid_engine_map import dummy_queue
 
 
 def job_to_xml(job):
@@ -69,7 +69,7 @@ MAX_NUM_RUNNING = 10
 assert len(sys.argv) == 2
 assert sys.argv[1] == "-xml"
 
-with open(dummy.QUEUE_STATE_PATH, "rt") as f:
+with open(dummy_queue.QUEUE_STATE_PATH, "rt") as f:
     state = json.loads(f.read())
 
 evil_idxs_num_fails = {}
@@ -116,7 +116,7 @@ for idx in evil_idxs_num_fails:
 state["evil_jobs"] = evil_jobs
 
 
-with open(dummy.QUEUE_STATE_PATH, "wt") as f:
+with open(dummy_queue.QUEUE_STATE_PATH, "wt") as f:
     f.write(json.dumps(state, indent=4))
 
 out_xml = state_to_xml(state)

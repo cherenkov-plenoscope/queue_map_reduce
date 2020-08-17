@@ -99,9 +99,9 @@ Before running the dummy-queue, this state-file must be initialized using:
 
 .. code:: python
 
-    from sun_grid_engine_map import _dummy_queue
+    from sun_grid_engine_map import dummy_queue
 
-    _dummy_queue.init_queue_state(
+    dummy_queue.init_queue_state(
         path="tests/resources/dummy_queue_state.json"
     )
 

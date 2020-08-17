@@ -1,5 +1,5 @@
 import sun_grid_engine_map as qmr
-from sun_grid_engine_map import _dummy_queue as dummy
+from sun_grid_engine_map import dummy_queue as dummy
 import numpy as np
 import tempfile
 import os

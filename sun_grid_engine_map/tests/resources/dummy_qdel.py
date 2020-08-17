@@ -2,14 +2,14 @@
 import sys
 import json
 import datetime
-from sun_grid_engine_map import _dummy_queue as dummy
+from sun_grid_engine_map import dummy_queue
 
 # dummy qdel
 
 assert len(sys.argv) == 2
 JB_job_number = sys.argv[1]
 
-with open(dummy.QUEUE_STATE_PATH, "rt") as f:
+with open(dummy_queue.QUEUE_STATE_PATH, "rt") as f:
     old_state = json.loads(f.read())
 
 found = False
@@ -30,7 +30,7 @@ for job in old_state["pending"]:
     else:
         state["pending"].append(job)
 
-with open(dummy.QUEUE_STATE_PATH, "wt") as f:
+with open(dummy_queue.QUEUE_STATE_PATH, "wt") as f:
     f.write(json.dumps(state, indent=4))
 
 if found == True:
