@@ -115,8 +115,8 @@ Because of the global state-fiel, only one dummy_queue must run at a time.
 .. |TravisBuildStatus| image:: https://travis-ci.org/cherenkov-plenoscope/queue_map_reduce.svg?branch=master
    :target: https://travis-ci.org/cherenkov-plenoscope/queue_map_reduce
 
-.. |PyPIStatus| image:: https://badge.fury.io/py/NOT_YET_ON_PYPI.svg
-   :target: https://pypi.python.org/pypi/NOT_YET_ON_PYPI
+.. |PyPIStatus| image:: https://badge.fury.io/py/queue_map_reduce_relleums.svg
+   :target: https://pypi.python.org/pypi/queue_map_reduce_relleums
 
 .. |BlackStyle| image:: https://img.shields.io/badge/code%20style-black-000000.svg
    :target: https://github.com/psf/black
