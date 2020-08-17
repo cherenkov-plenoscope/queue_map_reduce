@@ -308,23 +308,22 @@ def map_and_reduce(
     if work_dir is None:
         work_dir = os.path.abspath(os.path.join(".", ".qsub_" + session_id))
 
-    _log("Start map().")
+    _log("Start map()")
 
+    _log("Making work_dir ", work_dir)
     os.makedirs(work_dir)
-    _log("Session directory ", work_dir)
 
-    _log("Write worker node script.")
-
+    script_path = os.path.join(work_dir, "worker_node_script.py")
+    _log("Writing worker-node-script", script_path)
     worker_node_script_str = _make_worker_node_script(
         module_name=function.__module__,
         function_name=function.__name__,
         environ=dict(os.environ),
     )
-    script_path = os.path.join(work_dir, "worker_node_script.py")
     _write_text_to_path(text=worker_node_script_str, path=script_path)
     _make_path_executable(path=script_path)
 
-    _log("Write jobs.")
+    _log("Writing jobs")
     JB_names_in_session = []
     for idx, job in enumerate(jobs):
         JB_name = _make_JB_name(session_id=session_id, idx=idx)
@@ -332,7 +331,7 @@ def map_and_reduce(
         with open(_job_path(work_dir, idx), "wb") as f:
             f.write(pickle.dumps(job))
 
-    _log("Submitt jobs.")
+    _log("Submitting jobs")
 
     for JB_name in JB_names_in_session:
         idx = _idx_from_JB_name(JB_name)
@@ -347,7 +346,7 @@ def map_and_reduce(
             stderr_path=_job_path(work_dir, idx) + ".e",
         )
 
-    _log("Wait for jobs to finish.")
+    _log("Waiting for jobs to finish")
 
     JB_names_in_session_set = set(JB_names_in_session)
     still_running = True
@@ -386,14 +385,14 @@ def map_and_reduce(
             job_id_str = "JB_name {:s}, JB_job_number {:s}, idx {:09d}".format(
                 job["JB_name"], job["JB_job_number"], idx
             )
-            _log("Error-state in ", job_id_str)
-            _log("qdel ", job_id_str)
+            _log("Found error-state in ", job_id_str)
+            _log("Deleting ", job_id_str)
 
             _qdel(JB_job_number=job["JB_job_number"], qdel_path=qdel_path)
 
             if num_resubmissions_by_idx[idx] <= max_num_resubmissions:
                 _log(
-                    "resubmit {:d} of {:d}, JB_name {:s}".format(
+                    "Resubmitting {:d} of {:d}, JB_name {:s}".format(
                         num_resubmissions_by_idx[idx],
                         max_num_resubmissions,
                         job["JB_name"],
@@ -421,7 +420,7 @@ def map_and_reduce(
 
         time.sleep(polling_interval_qstat)
 
-    _log("Reduce results.")
+    _log("Reducing results")
 
     results = []
     results_are_incomplete = False
@@ -439,14 +438,14 @@ def map_and_reduce(
     has_stderr = False
     if _has_non_zero_stderrs(work_dir=work_dir, num_jobs=len(jobs)):
         has_stderr = True
-        _log("Found stderr.")
+        _log("Found non zero stderr")
 
     if (has_stderr or keep_work_dir or results_are_incomplete):
-        _log("Keep work_dir: ", work_dir)
+        _log("Keeping work_dir: ", work_dir)
     else:
-        _log("Remove work_dir: ", work_dir)
+        _log("Removing work_dir: ", work_dir)
         shutil.rmtree(work_dir)
 
-    _log("Stop map().")
+    _log("Stop map()")
 
     return results
