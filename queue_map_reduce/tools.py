@@ -242,7 +242,7 @@ def _jobs_running_pending_error(
     )
 
 
-def map_and_reduce(
+def map_reduce(
     function,
     jobs,
     queue_name=None,
