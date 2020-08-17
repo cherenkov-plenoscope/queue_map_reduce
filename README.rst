@@ -109,6 +109,8 @@ Now when testing you point our ``map()`` to our dummy-queue. The dummy-queue can
 
 See ``tests/test_full_chain_with_dummy_qsub.py``.
 
+Because of the global state-fiel, only one dummy_queue must run at a time.
+
 
 .. |TravisBuildStatus| image:: https://travis-ci.org/cherenkov-plenoscope/sun_grid_engine_map.svg?branch=master
    :target: https://travis-ci.org/cherenkov-plenoscope/sun_grid_engine_map
