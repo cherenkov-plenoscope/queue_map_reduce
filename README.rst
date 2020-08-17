@@ -51,9 +51,7 @@ Inner workings
 
 - When no more jobs are running or pending, ``map()`` will start to reduce the results. It will read each result from ``work_dir/{:09d}.pkl.out`` and append it the the list of results.
 
-- In case a jobs was not able to create a result in ``work_dir/{:09d}.pkl.out``, The ``None`` will be appended to the list of results instead.
-
-- In case of 
+- In case of non zero ``stderr`` in any job, a missing result, or on the users request, the ``work_dir`` will be kept for inspection. Otherwise its removed.
 
 
 ``qsub``
