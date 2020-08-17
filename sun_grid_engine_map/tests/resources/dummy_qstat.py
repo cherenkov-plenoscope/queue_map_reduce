@@ -63,7 +63,7 @@ def actually_run_the_job(job):
 
 # dummy qstat
 # ===========
-# Every time dummy qsub is called, it runs one job.
+# Every time this is called, it runs one job.
 MAX_NUM_RUNNING = 10
 
 assert len(sys.argv) == 2
