@@ -16,7 +16,7 @@ Job-queues, or batch-jobs are a powerful tool to distribute your compute-jobs ov
         jobs=[numpy.arange(i, 100+i) for i in range(10)]
     )
 
-The interface is inspired by  in ``multiprocessing.Pool``'s ``map()``.
+The interface is inspired by the stdandard ``map()`` and ``multiprocessing.Pool``'s ``map()``.
 
 Requirements
 ------------
@@ -35,8 +35,15 @@ Different flavors of ``qsub``, ``qstat``, and ``qdel`` might have different inte
 
 - Sun Grid Engine (SGE) 8.1.9
 
+Features
+--------
+- Only one funtion to map and reduce in a queue.
+
+- Jobs that run into states ``'E'`` will be deleted and resubmitted until an upper limit is reached.
+
+
 Inner workings
---------------
+==============
 - Our ``map()`` creates a working directory as the mapping and reduction takes place in the file-system. You can set this ``work_dir`` manually to ensure it is in a common path of all worker-nodes and the process-node.
 
 - Our ``map()`` serializes each of your ``jobs`` using ``pickle`` into a seperate file in the ``work_dir`` in ``work_dir/{:09d}.pkl``.
@@ -54,29 +61,13 @@ Inner workings
 - In case of non zero ``stderr`` in any job, a missing result, or on the users request, the ``work_dir`` will be kept for inspection. Otherwise its removed.
 
 
-``qsub``
-    The command ``qsub -o -e -N -S`` is used to submit your job into the queue. It must support arguments ``-o`` and ``-e`` to write ``std-out`` and ``std-err`` to files. Argument ``-N`` is the ``JB_name`` created by ``queue_map_and_reduce``, and ``-S`` is the path of the program that will be invoked to process the script of the batch-job.
+Identifying jobs
+----------------
+- ``JB_job_number`` is assigned to your job by the queue-system for its own book-keeping.
 
-``qstat``
-    The ``qstat -xml`` is used to monitor the state of your jobs while they are pending, running, or in an error-state. To parse the ``xml`` we use the ``qstat`` module.
+- ``JB_name`` is the name assigned to your job by our ``map()``. It is composed of a session-name with an iso-time-stamp, and the ``idx`` of your job with respect to your lists of jobs. E.g. ``"q"%Y-%m-%dT%H:%M:%S"#{:09d}"``
 
-    .. code:: xml
-
-        <job_list state="pending">
-            <JB_job_number>1337</JB_job_number>
-            <JAT_prio>0.00000</JAT_prio>
-            <JB_name>q2019-06-23T13:24:83#00001</JB_name>
-            <JB_owner>corona</JB_owner>
-            <state>qw</state>
-            <JB_submission_time>2019-06-23T13:28:09</JB_submission_time>
-            <queue_name></queue_name>
-            <slots>1</slots>
-        </job_list>
-
-
-
-
-``qdel JB_job_number`` is used to delete your jobs in case they run into error-states.
+- ``idx`` is only used within our ``map()``. It is the index of your job with respect to your list of jobs. It is written into ``JB_name``, and it is the ``idx`` used to create the job's filenames in the ``work_dir`` such as ``work_dir/{:09d}.pkl``.
 
 
 Environment Variables
@@ -85,10 +76,38 @@ All the users environment-variables in the process where ``queue_map_and_reduce.
 
 The ``python``-script executed on the worker-nodes will set the environment-variables before calling ``function(job)``. Here we do not rely on ``qsub's`` argument ``-V`` because on some clusters this will _not_ set _all_ variables. Apparently some admins fear security issues when using ``qsub -V`` to set ``LD_LIBRARY_PATH``.
 
+Testing
+=======
 
-dummy queue for testing
------------------------
+.. code:: bash
+
+    py.test -s .
+
+
+dummy queue
+-----------
 To test our ``map()`` we provide a dummy ``qsub``, ``qstat``, and ``qdel``.
+These are individual ``python``-scripts which all act on a common state-file in ``tests/resources/dummy_queue_state.json``.
+
+Here ``dummy_qsub.py`` only appends jobs to the list of pending jobs in the state-file.
+
+The ``qdummy_del.py`` only removes jobs from the state-file.
+
+And ``dummy_qstat.py`` does move the jobs from the pending to the running list, and does trigger the actual processing of the jobs. Each time ``dummy_qstat.py`` is called it performs a single action on the state-file. So it must be called multiple times to process all jobs.
+
+Before running the dummy-queue, this state-file must be initialized using:
+
+.. code:: python
+
+    from sun_grid_engine_map import _dummy_queue
+
+    _dummy_queue.init_queue_state(
+        path="tests/resources/dummy_queue_state.json"
+    )
+
+Now when testing you point our ``map()`` to our dummy-queue. The dummy-queue can also intentionally bring jobs into the error-state.
+
+See ``tests/test_full_chain_with_dummy_qsub.py``.
 
 
 .. |TravisBuildStatus| image:: https://travis-ci.org/cherenkov-plenoscope/sun_grid_engine_map.svg?branch=master
