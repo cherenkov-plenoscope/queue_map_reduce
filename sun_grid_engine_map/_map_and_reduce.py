@@ -421,7 +421,7 @@ def map_and_reduce(
 
         time.sleep(polling_interval_qstat)
 
-    _log("Collect results.")
+    _log("Reduce results.")
 
     results = []
     for idx, job in enumerate(jobs):
