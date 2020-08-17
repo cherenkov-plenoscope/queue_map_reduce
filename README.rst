@@ -19,7 +19,7 @@ Job-queues, or batch-jobs are a powerful tool to distribute your compute-jobs ov
 The interface is inspired by the stdandard ``map()`` and ``multiprocessing.Pool``'s ``map()``.
 
 Requirements
-------------
+============
 
 - Programs ``qsub``, ``qstat``, and ``qdel`` are required to submit, monitor, and delete jobs.
 
