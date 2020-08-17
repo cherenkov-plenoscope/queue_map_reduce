@@ -323,7 +323,7 @@ def map_and_reduce(
     _write_text_to_path(text=worker_node_script_str, path=script_path)
     _make_path_executable(path=script_path)
 
-    _log("Writing jobs")
+    _log("Mapping jobs into work_dir")
     JB_names_in_session = []
     for idx, job in enumerate(jobs):
         JB_name = _make_JB_name(session_id=session_id, idx=idx)
@@ -420,7 +420,7 @@ def map_and_reduce(
 
         time.sleep(polling_interval_qstat)
 
-    _log("Reducing results")
+    _log("Reducing results from work_dir")
 
     results = []
     results_are_incomplete = False
