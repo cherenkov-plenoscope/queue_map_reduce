@@ -38,7 +38,7 @@ def _make_worker_node_script(module_name, function_name, environ):
 
     return (
         ""
-        "# I was generated automatically by sun_grid_engine_map.\n"
+        "# I was generated automatically by queue_map_reduce.\n"
         "# I will be executed on the worker-nodes.\n"
         "# Do not modify me.\n"
         "from {module_name:s} import {function_name:s}\n"
