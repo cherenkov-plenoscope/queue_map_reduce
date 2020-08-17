@@ -440,7 +440,7 @@ def map_and_reduce(
         has_stderr = True
         _log("Found non zero stderr")
 
-    if (has_stderr or keep_work_dir or results_are_incomplete):
+    if has_stderr or keep_work_dir or results_are_incomplete:
         _log("Keeping work_dir: ", work_dir)
     else:
         _log("Removing work_dir: ", work_dir)
