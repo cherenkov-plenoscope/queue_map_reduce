@@ -74,7 +74,7 @@ Environment Variables
 ---------------------
 All the users environment-variables in the process where ``queue_map_and_reduce.map()`` is called will be exported in the job's context.
 
-The ``python``-script executed on the worker-nodes will set the environment-variables before calling ``function(job)``. Here we do not rely on ``qsub's`` argument ``-V`` because on some clusters this will _not_ set _all_ variables. Apparently some admins fear security issues when using ``qsub -V`` to set ``LD_LIBRARY_PATH``.
+The ``python``-script executed on the worker-nodes will set the environment-variables before calling ``function(job)``. Here we do not rely on ``qsub``'s argument ``-V`` because on some clusters this will _not_ set _all_ variables. Apparently some admins fear security issues when using ``qsub -V`` to set ``LD_LIBRARY_PATH``.
 
 Testing
 =======
