@@ -1,6 +1,6 @@
-====================
-queue map and reduce
-====================
+================
+queue map reduce
+================
 
 |TravisBuildStatus| |PyPIStatus| |BlackStyle|
 
@@ -8,7 +8,7 @@ Job-queues, or batch-jobs are a powerful tool to distribute your compute-jobs ov
 
 .. code:: python
 
-    import sun_grid_engine_map as qmr
+    import queue_map_reduce as qmr
     import numpy
 
     results = qmr.map(
@@ -99,7 +99,7 @@ Before running the dummy-queue, this state-file must be initialized using:
 
 .. code:: python
 
-    from sun_grid_engine_map import dummy_queue
+    from queue_map_reduce import dummy_queue
 
     dummy_queue.init_queue_state(
         path="tests/resources/dummy_queue_state.json"
@@ -112,8 +112,8 @@ See ``tests/test_full_chain_with_dummy_qsub.py``.
 Because of the global state-fiel, only one dummy_queue must run at a time.
 
 
-.. |TravisBuildStatus| image:: https://travis-ci.org/cherenkov-plenoscope/sun_grid_engine_map.svg?branch=master
-   :target: https://travis-ci.org/cherenkov-plenoscope/sun_grid_engine_map
+.. |TravisBuildStatus| image:: https://travis-ci.org/cherenkov-plenoscope/queue_map_reduce.svg?branch=master
+   :target: https://travis-ci.org/cherenkov-plenoscope/queue_map_reduce
 
 .. |PyPIStatus| image:: https://badge.fury.io/py/NOT_YET_ON_PYPI.svg
    :target: https://pypi.python.org/pypi/NOT_YET_ON_PYPI

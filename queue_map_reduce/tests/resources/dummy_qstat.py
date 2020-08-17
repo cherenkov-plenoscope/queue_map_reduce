@@ -3,8 +3,8 @@ import sys
 import json
 import datetime
 import subprocess
-import sun_grid_engine_map as qmr
-from sun_grid_engine_map import dummy_queue
+import queue_map_reduce as qmr
+from queue_map_reduce import dummy_queue
 
 
 def job_to_xml(job):

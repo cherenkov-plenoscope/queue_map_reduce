@@ -1,6 +1,6 @@
-import sun_grid_engine_map as qmr
-from sun_grid_engine_map import _map_and_reduce as _qmr
-from sun_grid_engine_map import dummy_queue as dummy
+import queue_map_reduce as qmr
+from queue_map_reduce import _map_and_reduce as _qmr
+from queue_map_reduce import dummy_queue as dummy
 import pickle
 import numpy
 import tempfile

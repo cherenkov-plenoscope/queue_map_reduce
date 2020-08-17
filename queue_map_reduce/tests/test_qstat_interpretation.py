@@ -1,4 +1,4 @@
-from sun_grid_engine_map import _map_and_reduce as _qmr
+from queue_map_reduce import _map_and_reduce as _qmr
 import pickle
 import numpy
 import os

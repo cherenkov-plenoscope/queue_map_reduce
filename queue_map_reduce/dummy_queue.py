@@ -8,7 +8,7 @@ import json
 
 def resource_path(name):
     return pkg_resources.resource_filename(
-        "sun_grid_engine_map", os.path.join("tests", "resources", name)
+        "queue_map_reduce", os.path.join("tests", "resources", name)
     )
 
 

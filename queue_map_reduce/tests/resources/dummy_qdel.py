@@ -2,7 +2,7 @@
 import sys
 import json
 import datetime
-from sun_grid_engine_map import dummy_queue
+from queue_map_reduce import dummy_queue
 
 # dummy qdel
 # ==========

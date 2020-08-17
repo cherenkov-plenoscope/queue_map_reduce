@@ -5,17 +5,17 @@ with open("README.rst", "r") as f:
     long_description = f.read()
 
 setuptools.setup(
-    name="sun_grid_engine_map",
+    name="queue_map_reduce",
     version="1.0.3",
     author="Sebastian Achim Mueller",
     author_email="sebastian-achim.mueller@mpi-hd.mpg.de",
-    description="Map and reduce for qsub.",
+    description="Map and reduce for batch-jobs in distributed computing.",
     long_description=long_description,
     long_description_content_type="text/x-rst",
-    url="https://github.com/cherenkov-plenoscope/sun_grid_engine_map",
+    url="https://github.com/cherenkov-plenoscope/queue_map_reduce",
     packages=setuptools.find_packages(),
     package_data={
-        "sun_grid_engine_map": [os.path.join("tests", "resources", "*")]
+        "queue_map_reduce": [os.path.join("tests", "resources", "*")]
     },
     install_requires=["qstat>=0.0.5",],
     classifiers=[

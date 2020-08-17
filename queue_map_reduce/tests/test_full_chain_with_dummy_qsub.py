@@ -1,14 +1,14 @@
-import sun_grid_engine_map as qmr
-from sun_grid_engine_map import dummy_queue as dummy
+import queue_map_reduce as qmr
+from queue_map_reduce import dummy_queue
 import numpy as np
 import tempfile
 import os
 
 
 def test_dummys_exist():
-    assert os.path.exists(dummy.QSUB_PATH)
-    assert os.path.exists(dummy.QSTAT_PATH)
-    assert os.path.exists(dummy.QDEL_PATH)
+    assert os.path.exists(dummy_queue.QSUB_PATH)
+    assert os.path.exists(dummy_queue.QSTAT_PATH)
+    assert os.path.exists(dummy_queue.QDEL_PATH)
 
 
 def test_run_with_failing_job():
@@ -20,8 +20,8 @@ def test_run_with_failing_job():
     with tempfile.TemporaryDirectory(prefix="sge") as tmp_dir:
         qsub_tmp_dir = os.path.join(tmp_dir, "qsub_tmp")
 
-        dummy.init_queue_state(
-            path=dummy.QUEUE_STATE_PATH,
+        dummy_queue.init_queue_state(
+            path=dummy_queue.QUEUE_STATE_PATH,
             evil_jobs=[{"idx": 13, "num_fails": 0, "max_num_fails": 5}],
         )
 
@@ -39,9 +39,9 @@ def test_run_with_failing_job():
             work_dir=qsub_tmp_dir,
             keep_work_dir=True,
             max_num_resubmissions=10,
-            qsub_path=dummy.QSUB_PATH,
-            qstat_path=dummy.QSTAT_PATH,
-            qdel_path=dummy.QDEL_PATH,
+            qsub_path=dummy_queue.QSUB_PATH,
+            qstat_path=dummy_queue.QSTAT_PATH,
+            qdel_path=dummy_queue.QDEL_PATH,
             error_state_indicator="E",
         )
 
