@@ -424,6 +424,7 @@ def map_and_reduce(
     _log("Reduce results.")
 
     results = []
+    results_are_incomplete = False
     for idx, job in enumerate(jobs):
         try:
             result_path = _job_path(work_dir, idx) + ".out"
@@ -431,16 +432,19 @@ def map_and_reduce(
                 result = pickle.loads(f.read())
             results.append(result)
         except FileNotFoundError:
+            results_are_incomplete = True
             _log("No result ", result_path)
             results.append(None)
 
-    if (
-        _has_non_zero_stderrs(work_dir=work_dir, num_jobs=len(jobs))
-        or keep_work_dir
-    ):
+    has_stderr = False
+    if _has_non_zero_stderrs(work_dir=work_dir, num_jobs=len(jobs)):
+        has_stderr = True
         _log("Found stderr.")
-        _log("Keep work dir: ", work_dir)
+
+    if (has_stderr or keep_work_dir or results_are_incomplete):
+        _log("Keep work_dir: ", work_dir)
     else:
+        _log("Remove work_dir: ", work_dir)
         shutil.rmtree(work_dir)
 
     _log("Stop map().")
