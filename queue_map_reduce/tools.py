@@ -5,7 +5,6 @@ import subprocess
 import qstat
 import time
 import shutil
-import tempfile
 import json
 
 
