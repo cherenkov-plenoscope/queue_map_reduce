@@ -76,22 +76,10 @@ def _qsub(
     cmd = [qsub_path]
     if queue_name:
         cmd += ["-q", queue_name]
-    cmd += [
-        "-o",
-        stdout_path,
-    ]
-    cmd += [
-        "-e",
-        stderr_path,
-    ]
-    cmd += [
-        "-N",
-        JB_name,
-    ]
-    cmd += [
-        "-S",
-        script_exe_path,
-    ]
+    cmd += ["-o", stdout_path]
+    cmd += ["-e", stderr_path]
+    cmd += ["-N", JB_name]
+    cmd += ["-S", script_exe_path]
     cmd += [script_path]
     for argument in arguments:
         cmd += [argument]
