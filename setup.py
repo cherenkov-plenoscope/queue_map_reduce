@@ -6,7 +6,7 @@ with open("README.rst", "r") as f:
 
 setuptools.setup(
     name="queue_map_reduce_relleums",
-    version="1.0.4",
+    version="1.0.5",
     author="Sebastian Achim Mueller",
     author_email="sebastian-achim.mueller@mpi-hd.mpg.de",
     description="Map and reduce for batch-jobs in distributed computing.",

@@ -6,6 +6,7 @@ import qstat
 import time
 import shutil
 import json
+from . import network_file_system as nfs
 
 
 def _make_worker_node_script(module_name, function_name, environ):
@@ -44,17 +45,16 @@ def _make_worker_node_script(module_name, function_name, environ):
         "import pickle\n"
         "import sys\n"
         "import os\n"
+        "from queue_map_reduce import network_file_system as nfs\n"
         "\n"
         "{add_environ:s}"
         "\n"
         "assert(len(sys.argv) == 2)\n"
-        'with open(sys.argv[1], "rb") as f:\n'
-        "    job = pickle.loads(f.read())\n"
+        'job = pickle.loads(nfs.read(sys.argv[1], mode="rb"))\n'
         "\n"
         "result = {function_name:s}(job)\n"
         "\n"
-        'with open(sys.argv[1]+".out", "wb") as f:\n'
-        "    f.write(pickle.dumps(result))\n"
+        'nfs.write(pickle.dumps(result), sys.argv[1]+".out", mode="wb")\n'
         "".format(
             module_name=module_name,
             function_name=function_name,
@@ -129,11 +129,6 @@ def _log(*args, **kwargs):
 def _make_path_executable(path):
     st = os.stat(path)
     os.chmod(path, st.st_mode | stat.S_IEXEC)
-
-
-def _write_text_to_path(text, path):
-    with open(path, "wt") as f:
-        f.write(text)
 
 
 def _make_JB_name(session_id, idx):
@@ -325,7 +320,7 @@ def map_reduce(
         function_name=function.__name__,
         environ=dict(os.environ),
     )
-    _write_text_to_path(text=worker_node_script_str, path=script_path)
+    nfs.write(content=worker_node_script_str, path=script_path, mode="wt")
     _make_path_executable(path=script_path)
 
     _log("Mapping jobs into work_dir")
@@ -333,8 +328,11 @@ def map_reduce(
     for idx, job in enumerate(jobs):
         JB_name = _make_JB_name(session_id=session_id, idx=idx)
         JB_names_in_session.append(JB_name)
-        with open(_job_path(work_dir, idx), "wb") as f:
-            f.write(pickle.dumps(job))
+        nfs.write(
+            content=pickle.dumps(job),
+            path=_job_path(work_dir, idx),
+            mode="wb",
+        )
 
     _log("Submitting jobs")
 
@@ -415,9 +413,10 @@ def map_reduce(
                 )
 
         if jobs_error:
-            _write_text_to_path(
-                text=json.dumps(num_resubmissions_by_idx, indent=4),
+            nfs.write(
+                content=json.dumps(num_resubmissions_by_idx, indent=4),
                 path=os.path.join(work_dir, "num_resubmissions_by_idx.json"),
+                mode="wt",
             )
 
         if num_running == 0 and num_pending == 0:
@@ -432,8 +431,7 @@ def map_reduce(
     for idx, job in enumerate(jobs):
         try:
             result_path = _job_path(work_dir, idx) + ".out"
-            with open(result_path, "rb") as f:
-                result = pickle.loads(f.read())
+            result = pickle.loads(nfs.read(path=result_path, mode="rb"))
             results.append(result)
         except FileNotFoundError:
             results_are_incomplete = True
