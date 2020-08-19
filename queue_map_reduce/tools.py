@@ -17,7 +17,7 @@ def _make_worker_node_script(module_name, function_name, environ):
     It reads the job, runs result = function(job), and writes the result.
     The script will be called on the worker-node with a single argument:
 
-    python script.py /some/path/.qsub_YYYY-mm-dd_HH-MM-SS/000000123.pkl
+    python script.py /some/path/to/work_dir/{idx:09d}.pkl
 
     On environment-variables
     ------------------------
