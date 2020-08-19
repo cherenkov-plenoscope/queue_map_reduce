@@ -47,6 +47,33 @@ Features
 
 - No need for databases or web-servers.
 
+Scope
+=====
+Our scope is intentionally limited to embarrassingly simple parallel computing with a ``map()`` function while
+
+we assume the user
+------------------
+
+- has to fair-share the queue with other users **all** the time.
+
+- can not login to worker-nodes, thus can not communicate with her jobs when these are running.
+
+- can only write to her own ``$HOME``.
+
+- has to build and install any dependency from source in her own ``$HOME`` with an old ``gcc``.
+
+- has a high error-rate because of jobs dying in resource-conflicts with other users.
+
+Alternatives
+============
+When you do not share resources with other users, and when you have some administrative power than have a look at these:
+
+- Dask_ has a ``job_queue`` which also supports other flavors such as PBS, SLURM.
+
+- pyABC.sge_ has a ``sge.map()`` very much like our one.
+
+- ipyparallel_
+
 Inner workings
 ==============
 - Our ``map()`` makes a ``work_dir`` because the mapping and reduction takes place in the file-system. You can set ``work_dir`` manually to ensure it is in a common path of all worker-nodes and the process-node.
@@ -65,7 +92,6 @@ Inner workings
 
 - In case of non zero ``stderr`` in any job, a missing result, or on the user's request, the ``work_dir`` will be kept for inspection. Otherwise its removed.
 
-
 Identifying jobs
 ----------------
 - ``JB_job_number`` is assigned to your job by the queue-system for its own book-keeping.
@@ -73,7 +99,6 @@ Identifying jobs
 - ``JB_name`` is the name assigned to your job by our ``map()``. It is composed of the ``map()``'s session-name, and the ``idx`` of your job with respect to your lists of jobs. E.g. ``"q"%Y-%m-%dT%H:%M:%S"#{idx:09d}"``
 
 - ``idx`` is only used within our ``map()``. It is the index of your job with respect to your list of jobs. It is written into ``JB_name``, and it is the ``idx`` used to create the job's filenames such as ``work_dir/{idx:09d}.pkl``.
-
 
 Environment Variables
 ---------------------
@@ -87,7 +112,6 @@ Testing
 .. code:: bash
 
     py.test -s .
-
 
 dummy queue
 -----------
@@ -115,33 +139,6 @@ When testing our ``map()`` you set its arguments ``qsub_path``, ``qdel_path``, a
 See ``tests/test_full_chain_with_dummy_qsub.py``.
 
 Because of the global state-file, only one instance of dummy_queue must run at a time.
-
-Scope
-=====
-Our scope is intentionally limited to embarrassingly simple parallel computing with a ``map()`` function while
-
-we assume the user
-------------------
-- has to fair-share the queue with other users **all** the time.
-
-- can not login to worker-nodes, thus can not communicate with her jobs when these are running.
-
-- can only write to her own ``$HOME``.
-
-- has to build and install any dependency from source in her own ``$HOME`` with an old ``gcc``.
-
-- has a high error-rate because of jobs dying in resource-conflicts with other users.
-
-Alternatives
-============
-When you do not share resources with other users, and when you have some administrative power than have a look at these:
-
-- Dask_ has a ``job_queue`` which also supports other flavors such as PBS, SLURM.
-
-- pyABC.sge_ has a ``sge.map()`` very much like our one.
-
-- ipyparallel_
-
 
 .. |TravisBuildStatus| image:: https://travis-ci.org/cherenkov-plenoscope/queue_map_reduce.svg?branch=master
    :target: https://travis-ci.org/cherenkov-plenoscope/queue_map_reduce
