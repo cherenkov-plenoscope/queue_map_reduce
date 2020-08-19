@@ -50,7 +50,7 @@ Inner workings
 
 - Our ``map()`` reads all the environment-variables in its process.
 
-- Our ``map()`` creates the worker-node-script in ``work_dir/worker_node_script.py``. This ``python`` script contains and exports the process' environment-variables into the batch-job's constext. It reads the job from the ``work_dir`` in ``work_dir\{idx:09d}.pkl``, imports and runs your ``result = function(job)``, and finally writes the result back into ``work_dir\{idx:09d}.pkl.out``.
+- Our ``map()`` creates the worker-node-script in ``work_dir/worker_node_script.py``. This ``python`` script contains and exports the process' environment-variables into the batch-job's constext. It reads the job from the ``work_dir`` in ``work_dir/{idx:09d}.pkl``, imports and runs your ``result = function(job)``, and finally writes the result back into ``work_dir/{idx:09d}.pkl.out``.
 
 - Our ``map()`` starts to sbmit your jobs into the queue using ``qsub``. The ``stdout`` and ``stderr`` of the jobs are written to ``work_dir/{idx:09d}.pkl.o`` and ``work_dir/{idx:09d}.pkl.e`` respectively. By default, ``qsub`` is told to use ``shutil.which("python")`` to process the worker-node-script.
 
