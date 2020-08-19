@@ -136,11 +136,11 @@ Alternatives
 ============
 When you do not share resources with other users, and when you have some administrative power than have a look at these:
 
-- `Dask<https://docs.dask.org/en/latest/>` has a ``job_queue`` which also supports other flavors such as PBS, SLURM.
+- Dask_ has a ``job_queue`` which also supports other flavors such as PBS, SLURM.
 
-- `pyABC.sge<https://pyabc.readthedocs.io/en/latest/api_sge.html>` has a ``sge.map()`` very much like our one.
+- pyABC.sge_ has a ``sge.map()`` very much like our one.
 
-- `ipyparallel<https://ipyparallel.readthedocs.io/en/latest/index.html>`
+- ipyparallel_
 
 
 .. |TravisBuildStatus| image:: https://travis-ci.org/cherenkov-plenoscope/queue_map_reduce.svg?branch=master
@@ -152,4 +152,8 @@ When you do not share resources with other users, and when you have some adminis
 .. |BlackStyle| image:: https://img.shields.io/badge/code%20style-black-000000.svg
    :target: https://github.com/psf/black
 
-.. Dask_
+.. _Dask: https://docs.dask.org/en/latest/
+
+.. _pyABC.sge: https://pyabc.readthedocs.io/en/latest/api_sge.html
+
+.. _ipyparallel: https://ipyparallel.readthedocs.io/en/latest/index.html
