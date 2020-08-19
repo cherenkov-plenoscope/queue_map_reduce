@@ -128,11 +128,14 @@ def _idx_from_JB_name(JB_name):
     return int(idx_str)
 
 
-def _has_non_zero_stderrs(work_dir, num_jobs):
+def _has_invalid_or_non_empty_stderr(work_dir, num_jobs):
     has_errors = False
     for idx in range(num_jobs):
         e_path = _job_path(work_dir, idx) + ".e"
-        if os.stat(e_path).st_size != 0:
+        try:
+            if os.stat(e_path).st_size != 0:
+                has_errors = True
+        except FileNotFoundError:
             has_errors = True
     return has_errors
 
@@ -427,7 +430,7 @@ def map_reduce(
             results.append(None)
 
     has_stderr = False
-    if _has_non_zero_stderrs(work_dir=work_dir, num_jobs=len(jobs)):
+    if _has_invalid_or_non_empty_stderr(work_dir=work_dir, num_jobs=len(jobs)):
         has_stderr = True
         _log("Found non zero stderr")
 
