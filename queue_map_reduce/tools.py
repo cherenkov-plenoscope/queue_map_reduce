@@ -6,6 +6,8 @@ import qstat
 import time
 import shutil
 import json
+import logging
+import sys
 from . import network_file_system as nfs
 
 
@@ -72,6 +74,7 @@ def _qsub(
     JB_name,
     stdout_path,
     stderr_path,
+    logger,
 ):
     cmd = [qsub_path]
     if queue_name:
@@ -87,8 +90,9 @@ def _qsub(
     try:
         subprocess.check_output(cmd, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as e:
-        print("returncode", e.returncode)
-        print("output", e.output)
+        logger.critical("Error in qsub()")
+        logger.critical("qsub() returncode: {:d}".format(e.returncode))
+        logger.critical(e.output)
         raise
 
 
@@ -101,17 +105,17 @@ def _session_id_from_time_now():
     return time.strftime("%Y-%m-%dT%H-%M-%S", time.gmtime())
 
 
-def _time_iso8601():
-    return time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
-
-
-def _log(*args, **kwargs):
-    # json-line
-    msg = " ".join(map(str, args))
-    msg = msg.encode("unicode_escape").decode()
-    print(
-        '{"time": "' + _time_iso8601() + '", "msg": "' + msg + '"}', **kwargs
+def DefaultLoggerStdout():
+    lggr = logging.Logger(name=__name__)
+    fmtr = logging.Formatter(
+        fmt="%(asctime)s, %(levelname)s, %(module)s:%(funcName)s, %(message)s",
+        datefmt="%Y-%m-%dT%H:%M:%S",
     )
+    stha = logging.StreamHandler(sys.stdout)
+    stha.setFormatter(fmtr)
+    lggr.addHandler(stha)
+    lggr.setLevel(logging.DEBUG)
+    return lggr
 
 
 def _make_path_executable(path):
@@ -140,31 +144,31 @@ def _has_invalid_or_non_empty_stderr(work_dir, num_jobs):
     return has_errors
 
 
-def __qdel(JB_job_number, qdel_path):
+def __qdel(JB_job_number, qdel_path, logger):
     try:
         _ = subprocess.check_output(
             [qdel_path, str(JB_job_number)], stderr=subprocess.STDOUT,
         )
     except subprocess.CalledProcessError as e:
-        _log("qdel returncode: {:s}".format(e.returncode))
-        _log("qdel stdout: {:s}".format(e.output))
+        logger.critical("qdel returncode: {:s}".format(e.returncode))
+        logger.critical("qdel stdout: {:s}".format(e.output))
         raise
 
 
-def _qdel(JB_job_number, qdel_path):
+def _qdel(JB_job_number, qdel_path, logger):
     while True:
         try:
-            __qdel(JB_job_number, qdel_path)
+            __qdel(JB_job_number, qdel_path, logger=logger)
             break
         except KeyboardInterrupt:
             raise
         except Exception as bad:
-            _log("Problem in qdel")
-            print(bad)
+            logger.warning("Problem in qdel()")
+            logger.warning(str(bad))
             time.sleep(1)
 
 
-def _qstat(qstat_path):
+def _qstat(qstat_path, logger):
     """
     Return lists of running and pending jobs.
     Try again in case of Failure.
@@ -177,8 +181,8 @@ def _qstat(qstat_path):
         except KeyboardInterrupt:
             raise
         except Exception as bad:
-            _log("Problem in qstat")
-            print(bad)
+            logger.warning("Problem in qstat()")
+            logger.warning(str(bad))
             time.sleep(1)
     return running, pending
 
@@ -215,9 +219,11 @@ def _extract_error_from_running_pending(
 
 
 def _jobs_running_pending_error(
-    JB_names_set, error_state_indicator, qstat_path
+    JB_names_set, error_state_indicator, qstat_path, logger
 ):
-    all_jobs_running, all_jobs_pending = _qstat(qstat_path=qstat_path)
+    all_jobs_running, all_jobs_pending = _qstat(
+        qstat_path=qstat_path, logger=logger
+    )
     jobs_running = _filter_jobs_by_JB_name(all_jobs_running, JB_names_set)
     jobs_pending = _filter_jobs_by_JB_name(all_jobs_pending, JB_names_set)
     return _extract_error_from_running_pending(
@@ -240,6 +246,7 @@ def map_reduce(
     qstat_path="qstat",
     qdel_path="qdel",
     error_state_indicator="E",
+    logger=None,
 ):
     """
     Maps jobs to a function for embarrassingly parallel processing on a qsub
@@ -280,6 +287,9 @@ def map_reduce(
     max_num_resubmissions: int, optional
         In case of error-state in job, the job will be tried this often to be
         resubmitted befor giving up on it.
+    logger : logging.Logger(), optional
+        Logger-instance from python's logging library. If None, a default
+        logger is created which writes to sys.stdout.
 
     Example
     -------
@@ -288,24 +298,29 @@ def map_reduce(
         jobs=[numpy.arange(i, 100+i) for i in range(10)]
     )
     """
+    if logger is None:
+        logger = DefaultLoggerStdout()
+
     session_id = _session_id_from_time_now()
     if work_dir is None:
         work_dir = os.path.abspath(os.path.join(".", ".qsub_" + session_id))
 
-    _log("Start map()")
-    _log("qsub_path:  ", qsub_path)
-    _log("qstat_path: ", qstat_path)
-    _log("qdel_path:  ", qdel_path)
-    _log("queue_name: ", queue_name)
-    _log("python_path: ", python_path)
-    _log("polling-interval for qstat: ", polling_interval_qstat, "s")
-    _log("max. num. resubmissions: ", max_num_resubmissions)
-    _log("error-state-indicator: ", error_state_indicator)
-    _log("Making work_dir ", work_dir)
+    logger.info("Starting map()")
+    logger.debug("qsub_path: {:s}".format(qsub_path))
+    logger.debug("qstat_path: {:s}".format(qstat_path))
+    logger.debug("qdel_path: {:s}".format(qdel_path))
+    logger.debug("queue_name: {:s}".format(str(queue_name)))
+    logger.debug("python_path: {:s}".format(python_path))
+    logger.debug(
+        "polling-interval for qstat: {:f}s".format(polling_interval_qstat)
+    )
+    logger.debug("max. num. resubmissions: {:d}".format(max_num_resubmissions))
+    logger.debug("error-state-indicator: {:s}".format(error_state_indicator))
+    logger.info("Making work_dir {:s}".format(work_dir))
     os.makedirs(work_dir)
 
     script_path = os.path.join(work_dir, "worker_node_script.py")
-    _log("Writing worker-node-script", script_path)
+    logger.debug("Writing worker-node-script: {:s}".format(script_path))
     worker_node_script_str = _make_worker_node_script(
         module_name=function.__module__,
         function_name=function.__name__,
@@ -314,7 +329,7 @@ def map_reduce(
     nfs.write(content=worker_node_script_str, path=script_path, mode="wt")
     _make_path_executable(path=script_path)
 
-    _log("Mapping jobs into work_dir")
+    logger.info("Mapping jobs into work_dir")
     JB_names_in_session = []
     for idx, job in enumerate(jobs):
         JB_name = _make_JB_name(session_id=session_id, idx=idx)
@@ -325,7 +340,7 @@ def map_reduce(
             mode="wb",
         )
 
-    _log("Submitting jobs")
+    logger.info("Submitting jobs")
 
     for JB_name in JB_names_in_session:
         idx = _idx_from_JB_name(JB_name)
@@ -338,9 +353,10 @@ def map_reduce(
             JB_name=JB_name,
             stdout_path=_job_path(work_dir, idx) + ".o",
             stderr_path=_job_path(work_dir, idx) + ".e",
+            logger=logger,
         )
 
-    _log("Waiting for jobs to finish")
+    logger.info("Waiting for jobs to finish")
 
     JB_names_in_session_set = set(JB_names_in_session)
     still_running = True
@@ -354,6 +370,7 @@ def map_reduce(
             JB_names_set=JB_names_in_session_set,
             error_state_indicator=error_state_indicator,
             qstat_path=qstat_path,
+            logger=logger,
         )
         num_running = len(jobs_running)
         num_pending = len(jobs_pending)
@@ -363,7 +380,7 @@ def map_reduce(
             if num_resubmissions_by_idx[idx] >= max_num_resubmissions:
                 num_lost += 1
 
-        _log(
+        logger.info(
             "{: 4d} running, {: 4d} pending, {: 4d} error, {: 4d} lost".format(
                 num_running, num_pending, num_error, num_lost,
             )
@@ -379,13 +396,17 @@ def map_reduce(
             job_id_str = "JB_name {:s}, JB_job_number {:s}, idx {:09d}".format(
                 job["JB_name"], job["JB_job_number"], idx
             )
-            _log("Found error-state in ", job_id_str)
-            _log("Deleting ", job_id_str)
+            logger.warning("Found error-state in: {:s}".format(job_id_str))
+            logger.warning("Deleting: {:s}".format(job_id_str))
 
-            _qdel(JB_job_number=job["JB_job_number"], qdel_path=qdel_path)
+            _qdel(
+                JB_job_number=job["JB_job_number"],
+                qdel_path=qdel_path,
+                logger=logger,
+            )
 
             if num_resubmissions_by_idx[idx] <= max_num_resubmissions:
-                _log(
+                logger.warning(
                     "Resubmitting {:d} of {:d}, JB_name {:s}".format(
                         num_resubmissions_by_idx[idx],
                         max_num_resubmissions,
@@ -401,6 +422,7 @@ def map_reduce(
                     JB_name=job["JB_name"],
                     stdout_path=_job_path(work_dir, idx) + ".o",
                     stderr_path=_job_path(work_dir, idx) + ".e",
+                    logger=logger,
                 )
 
         if jobs_error:
@@ -415,7 +437,7 @@ def map_reduce(
 
         time.sleep(polling_interval_qstat)
 
-    _log("Reducing results from work_dir")
+    logger.info("Reducing results from work_dir")
 
     results = []
     results_are_incomplete = False
@@ -426,20 +448,20 @@ def map_reduce(
             results.append(result)
         except FileNotFoundError:
             results_are_incomplete = True
-            _log("No result ", result_path)
+            logger.warning("No result: {:s}".format(result_path))
             results.append(None)
 
     has_stderr = False
     if _has_invalid_or_non_empty_stderr(work_dir=work_dir, num_jobs=len(jobs)):
         has_stderr = True
-        _log("Found non zero stderr")
+        logger.warning("Found non zero stderr")
 
     if has_stderr or keep_work_dir or results_are_incomplete:
-        _log("Keeping work_dir: ", work_dir)
+        logger.warning("Keeping work_dir: {:s}".format(work_dir))
     else:
-        _log("Removing work_dir: ", work_dir)
+        logger.info("Removing work_dir: {:s}".format(work_dir))
         shutil.rmtree(work_dir)
 
-    _log("Stop map()")
+    logger.info("Stopping map()")
 
     return results
