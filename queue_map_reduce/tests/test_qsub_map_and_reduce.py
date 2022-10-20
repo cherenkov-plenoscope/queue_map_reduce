@@ -23,10 +23,10 @@ def test_import():
 
 def test_make_worker_node_script():
     with tempfile.TemporaryDirectory(prefix="sge") as tmp:
-        work = numpy.arange(100)
+        bundle = [numpy.arange(100)]
         function = numpy.sum
-        with open(os.path.join(tmp, "work.pkl"), "wb") as f:
-            f.write(pickle.dumps(work))
+        with open(os.path.join(tmp, "bundle.pkl"), "wb") as f:
+            f.write(pickle.dumps(bundle))
         s = qmr_tools._make_worker_node_script(
             module_name=function.__module__,
             function_name=function.__name__,
@@ -38,14 +38,14 @@ def test_make_worker_node_script():
             [
                 "python",
                 os.path.join(tmp, "worker_node_script.py"),
-                os.path.join(tmp, "work.pkl"),
+                os.path.join(tmp, "bundle.pkl"),
             ]
         )
         assert rc == 0
-        assert os.path.exists(os.path.join(tmp, "work.pkl") + ".out")
-        with open(os.path.join(tmp, "work.pkl") + ".out", "rb") as f:
+        assert os.path.exists(os.path.join(tmp, "bundle.pkl") + ".out")
+        with open(os.path.join(tmp, "bundle.pkl") + ".out", "rb") as f:
             result = pickle.loads(f.read())
-        assert result == function(work)
+        assert result == function(bundle[0])
 
 
 def test_full_chain():

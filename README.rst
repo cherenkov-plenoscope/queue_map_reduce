@@ -47,6 +47,8 @@ Features
 
 - No need for databases or web-servers.
 
+- Can bundle your jobs to process multiple jobs in serial on the process-node to avoid start-up-overhead with many small jobs.
+
 Scope
 =====
 Our scope is intentionally limited to embarrassingly simple parallel computing with a ``map()`` function while

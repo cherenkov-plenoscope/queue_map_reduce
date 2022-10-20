@@ -8,6 +8,7 @@ import shutil
 import json
 import logging
 import sys
+import math
 from . import network_file_system as nfs
 
 
@@ -52,11 +53,18 @@ def _make_worker_node_script(module_name, function_name, environ):
         "{add_environ:s}"
         "\n"
         "assert(len(sys.argv) == 2)\n"
-        'job = pickle.loads(nfs.read(sys.argv[1], mode="rb"))\n'
+        'bundle = pickle.loads(nfs.read(sys.argv[1], mode="rb"))\n'
+        "job_results = []\n"
+        "for j, job in enumerate(bundle):\n"
+        "    try:\n"
+        "        job_result = {function_name:s}(job)\n"
+        "    except Exception as bad:\n"
+        '        print("[job ", j, ", in bundle]", file=sys.stderr)\n'
+        "        print(bad, file=sys.stderr)\n"
+        "        job_result = None\n"
+        "    job_results.append(job_result)\n"
         "\n"
-        "result = {function_name:s}(job)\n"
-        "\n"
-        'nfs.write(pickle.dumps(result), sys.argv[1]+".out", mode="wb")\n'
+        'nfs.write(pickle.dumps(job_results), sys.argv[1]+".out", mode="wb")\n'
         "".format(
             module_name=module_name,
             function_name=function_name,
@@ -233,6 +241,46 @@ def _jobs_running_pending_error(
     )
 
 
+def bundle_jobs(jobs, num_bundles=None):
+    """
+    When you have too many jobs for your parallel processing queue this
+    function bundles multiple jobs into fewer bundles.
+
+    Parameters
+    ----------
+    jobs : list
+        Your jobs.
+    num_bundles : int (optional)
+        The maximum number of bundles. Your jobs will be spread over
+        these many bundles. If None, each bundle contains a single job.
+
+    Returns
+    -------
+        A list of bundles where each bundle is a list of jobs.
+        The lengths of the list of bundles is <= num_bundles.
+    """
+    num_jobs = len(jobs)
+
+    if num_bundles is None:
+        num_jobs_in_bundle = 1
+    else:
+        assert num_bundles > 0
+        num_jobs_in_bundle = int(math.ceil(num_jobs / num_bundles))
+
+    bundles = []
+    current_bundle = []
+    for j in range(num_jobs):
+        if len(current_bundle) < num_jobs_in_bundle:
+            current_bundle.append(jobs[j])
+        else:
+            bundles.append(current_bundle)
+            current_bundle = []
+            current_bundle.append(jobs[j])
+    if len(current_bundle):
+        bundles.append(current_bundle)
+    return bundles
+
+
 def map_reduce(
     function,
     jobs,
@@ -247,6 +295,7 @@ def map_reduce(
     qdel_path="qdel",
     error_state_indicator="E",
     logger=None,
+    num_bundles=None,
 ):
     """
     Maps jobs to a function for embarrassingly parallel processing on a qsub
@@ -290,6 +339,13 @@ def map_reduce(
     logger : logging.Logger(), optional
         Logger-instance from python's logging library. If None, a default
         logger is created which writes to sys.stdout.
+    num_bundles : int, optional
+        If provided, the jobs will be grouped in this many bundles.
+        The jobs in a bundle are computed serial on the worker-node.
+        It is useful to bundle jobs when the number of jobs is much larger
+        than the number of available slots for parallel computing and the
+        start-up-time for a slot is not much smaller than the compute-time for
+        a job.
 
     Example
     -------
@@ -329,13 +385,16 @@ def map_reduce(
     nfs.write(content=worker_node_script_str, path=script_path, mode="wt")
     _make_path_executable(path=script_path)
 
+    logger.info("Bundle jobs")
+    bundles = bundle_jobs(jobs=jobs, num_bundles=num_bundles)
+
     logger.info("Mapping jobs into work_dir")
     JB_names_in_session = []
-    for idx, job in enumerate(jobs):
+    for idx, bundle in enumerate(bundles):
         JB_name = _make_JB_name(session_id=session_id, idx=idx)
         JB_names_in_session.append(JB_name)
         nfs.write(
-            content=pickle.dumps(job),
+            content=pickle.dumps(bundle),
             path=_job_path(work_dir, idx),
             mode="wb",
         )
@@ -439,17 +498,23 @@ def map_reduce(
 
     logger.info("Reducing results from work_dir")
 
-    results = []
+    job_results = []
     results_are_incomplete = False
-    for idx, job in enumerate(jobs):
+
+    for idx, bundle in enumerate(bundles):
+        num_jobs_in_bundle = len(bundle)
+        bundle_result_path = _job_path(work_dir, idx) + ".out"
+
         try:
-            result_path = _job_path(work_dir, idx) + ".out"
-            result = pickle.loads(nfs.read(path=result_path, mode="rb"))
-            results.append(result)
+            bundle_result = pickle.loads(
+                nfs.read(path=bundle_result_path, mode="rb")
+            )
+            for job_result in bundle_result:
+                job_results.append(job_result)
         except FileNotFoundError:
             results_are_incomplete = True
-            logger.warning("No result: {:s}".format(result_path))
-            results.append(None)
+            logger.warning("No result: {:s}".format(bundle_result_path))
+            job_results += [None for i in range(num_jobs_in_bundle)]
 
     has_stderr = False
     if _has_invalid_or_non_empty_stderr(work_dir=work_dir, num_jobs=len(jobs)):
@@ -464,4 +529,4 @@ def map_reduce(
 
     logger.info("Stopping map()")
 
-    return results
+    return job_results
