@@ -32,9 +32,7 @@ def test_run_with_failing_job():
             job = np.arange(0, 100)
             jobs.append(job)
 
-        results = qmr.map(
-            function=np.sum,
-            jobs=jobs,
+        pool = qmr.Pool(
             polling_interval_qstat=0.1,
             work_dir=qsub_tmp_dir,
             keep_work_dir=True,
@@ -43,6 +41,11 @@ def test_run_with_failing_job():
             qstat_path=dummy_queue.QSTAT_PATH,
             qdel_path=dummy_queue.QDEL_PATH,
             error_state_indicator="E",
+        )
+
+        results = pool.map(
+            function=np.sum,
+            jobs=jobs,
         )
 
         for i in range(NUM_JOBS):

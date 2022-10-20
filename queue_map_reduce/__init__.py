@@ -1,1 +1,1 @@
-from .tools import map_reduce as map
+from .tools import Pool

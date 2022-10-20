@@ -281,252 +281,279 @@ def bundle_jobs(jobs, num_bundles=None):
     return bundles
 
 
-def map_reduce(
-    function,
-    jobs,
-    queue_name=None,
-    python_path=os.path.abspath(shutil.which("python")),
-    polling_interval_qstat=5,
-    work_dir=None,
-    keep_work_dir=False,
-    max_num_resubmissions=10,
-    qsub_path="qsub",
-    qstat_path="qstat",
-    qdel_path="qdel",
-    error_state_indicator="E",
-    logger=None,
-    num_bundles=None,
-):
+class Pool:
     """
-    Maps jobs to a function for embarrassingly parallel processing on a qsub
-    computing-cluster.
-
-    This for loop:
-
-    >    results = []
-    >    for job in jobs:
-    >        results.append(function(job))
-
-    will be executed in parallel on a qsub computing-cluster in order to obtain
-    results.
-    Both the jobs and results must be serializable using pickle.
-    The function must be part of an installed python-module.
-
-    Parameters
-    ----------
-    function : function-pointer
-        Pointer to a function in a python module. It must have both:
-        function.__module__
-        function.__name__
-    jobs : list
-        List of jobs. A job in the list must be a valid input to function.
-    queue_name : string, optional
-        Name of the queue to submit jobs to.
-    python_path : string, optional
-        The python path to be used on the computing-cluster's worker-nodes to
-        execute the worker-node's python-script.
-    polling_interval_qstat : float, optional
-        The time in seconds to wait before polling qstat again while waiting
-        for the jobs to finish.
-    work_dir : string, optional
-        The directory path where the jobs, the results and the
-        worker-node-script is stored.
-    keep_work_dir : bool, optional
-        When True, the working directory will not be removed.
-    max_num_resubmissions: int, optional
-        In case of error-state in job, the job will be tried this often to be
-        resubmitted befor giving up on it.
-    logger : logging.Logger(), optional
-        Logger-instance from python's logging library. If None, a default
-        logger is created which writes to sys.stdout.
-    num_bundles : int, optional
-        If provided, the jobs will be grouped in this many bundles.
-        The jobs in a bundle are computed serial on the worker-node.
-        It is useful to bundle jobs when the number of jobs is much larger
-        than the number of available slots for parallel computing and the
-        start-up-time for a slot is not much smaller than the compute-time for
-        a job.
-
-    Example
-    -------
-    results = map(
-        function=numpy.sum,
-        jobs=[numpy.arange(i, 100+i) for i in range(10)]
-    )
+    Multiprocessing on a compute-cluster using queues.
     """
-    if logger is None:
-        logger = DefaultLoggerStdout()
+    def __init__(
+        self,
+        queue_name=None,
+        python_path=os.path.abspath(shutil.which("python")),
+        polling_interval_qstat=5,
+        work_dir=None,
+        keep_work_dir=False,
+        max_num_resubmissions=10,
+        error_state_indicator="E",
+        logger=None,
+        num_bundles=None,
+        qsub_path="qsub",
+        qstat_path="qstat",
+        qdel_path="qdel",
+    ):
+        """
+        Parameters
+        ----------
+        queue_name : string, optional
+            Name of the queue to submit jobs to.
+        python_path : string, optional
+            The python path to be used on the computing-cluster's worker-nodes
+            to execute the worker-node's python-script.
+        polling_interval_qstat : float, optional
+            The time in seconds to wait before polling qstat again while
+            waiting for the jobs to finish.
+        work_dir : string, optional
+            The directory path where the jobs, the results and the
+            worker-node-script is stored.
+        keep_work_dir : bool, optional
+            When True, the working directory will not be removed.
+        max_num_resubmissions: int, optional
+            In case of error-state in job, the job will be tried this often to
+            be resubmitted befor giving up on it.
+        logger : logging.Logger(), optional
+            Logger-instance from python's logging library. If None, a default
+            logger is created which writes to sys.stdout.
+        num_bundles : int, optional
+            If provided, the jobs will be grouped in this many bundles.
+            The jobs in a bundle are computed serial on the worker-node.
+            It is useful to bundle jobs when the number of jobs is much larger
+            than the number of available slots for parallel computing and the
+            start-up-time for a slot is not much smaller than the compute-time
+            for a job.
+        """
 
-    session_id = _session_id_from_time_now()
-    if work_dir is None:
-        work_dir = os.path.abspath(os.path.join(".", ".qsub_" + session_id))
+        self.queue_name = queue_name
+        self.python_path = python_path
+        self.polling_interval_qstat = polling_interval_qstat
+        self.work_dir = work_dir
+        self.keep_work_dir = keep_work_dir
+        self.max_num_resubmissions = max_num_resubmissions
+        self.error_state_indicator = error_state_indicator
+        self.logger = logger
+        self.num_bundles = num_bundles
+        self.qsub_path = qsub_path
+        self.qstat_path = qstat_path
+        self.qdel_path = qdel_path
 
-    logger.info("Starting map()")
-    logger.debug("qsub_path: {:s}".format(qsub_path))
-    logger.debug("qstat_path: {:s}".format(qstat_path))
-    logger.debug("qdel_path: {:s}".format(qdel_path))
-    logger.debug("queue_name: {:s}".format(str(queue_name)))
-    logger.debug("python_path: {:s}".format(python_path))
-    logger.debug(
-        "polling-interval for qstat: {:f}s".format(polling_interval_qstat)
-    )
-    logger.debug("max. num. resubmissions: {:d}".format(max_num_resubmissions))
-    logger.debug("error-state-indicator: {:s}".format(error_state_indicator))
-    logger.info("Making work_dir {:s}".format(work_dir))
-    os.makedirs(work_dir)
+        if self.logger is None:
+            self.logger = DefaultLoggerStdout()
 
-    script_path = os.path.join(work_dir, "worker_node_script.py")
-    logger.debug("Writing worker-node-script: {:s}".format(script_path))
-    worker_node_script_str = _make_worker_node_script(
-        module_name=function.__module__,
-        function_name=function.__name__,
-        environ=dict(os.environ),
-    )
-    nfs.write(content=worker_node_script_str, path=script_path, mode="wt")
-    _make_path_executable(path=script_path)
+    def __repr__(self):
+        return self.__class__.__name__ + "()"
 
-    logger.info("Bundle jobs")
-    bundles = bundle_jobs(jobs=jobs, num_bundles=num_bundles)
+    def map(self, function, jobs):
+        """
+        Maps jobs to a function.
+        Both jobs and results must be serializable using pickle.
+        The function must be part of a python-module.
 
-    logger.info("Mapping jobs into work_dir")
-    JB_names_in_session = []
-    for idx, bundle in enumerate(bundles):
-        JB_name = _make_JB_name(session_id=session_id, idx=idx)
-        JB_names_in_session.append(JB_name)
-        nfs.write(
-            content=pickle.dumps(bundle),
-            path=_job_path(work_dir, idx),
-            mode="wb",
-        )
+        Parameters
+        ----------
+        function : function-pointer
+            Pointer to a function in a python-module. It must have both:
+            function.__module__
+            function.__name__
+        jobs : list
+            List of jobs. A job in the list must be a valid input to function.
 
-    logger.info("Submitting jobs")
+        Returns
+        -------
+        results : list
+            A list of the results. One result for each job.
 
-    for JB_name in JB_names_in_session:
-        idx = _idx_from_JB_name(JB_name)
-        _qsub(
-            qsub_path=qsub_path,
-            queue_name=queue_name,
-            script_exe_path=python_path,
-            script_path=script_path,
-            arguments=[_job_path(work_dir, idx)],
-            JB_name=JB_name,
-            stdout_path=_job_path(work_dir, idx) + ".o",
-            stderr_path=_job_path(work_dir, idx) + ".e",
-            logger=logger,
-        )
+        Example
+        -------
+        results = pool.map(sum, [[1, 2], [2, 3], [4, 5], ])
+        """
+        sl = self.logger
+        swd = self.work_dir
 
-    logger.info("Waiting for jobs to finish")
+        session_id = _session_id_from_time_now()
 
-    JB_names_in_session_set = set(JB_names_in_session)
-    still_running = True
-    num_resubmissions_by_idx = {}
-    while still_running:
-        (
-            jobs_running,
-            jobs_pending,
-            jobs_error,
-        ) = _jobs_running_pending_error(
-            JB_names_set=JB_names_in_session_set,
-            error_state_indicator=error_state_indicator,
-            qstat_path=qstat_path,
-            logger=logger,
-        )
-        num_running = len(jobs_running)
-        num_pending = len(jobs_pending)
-        num_error = len(jobs_error)
-        num_lost = 0
-        for idx in num_resubmissions_by_idx:
-            if num_resubmissions_by_idx[idx] >= max_num_resubmissions:
-                num_lost += 1
+        if swd is None:
+            swd = os.path.abspath(os.path.join(".", ".qsub_" + session_id))
 
-        logger.info(
-            "{: 4d} running, {: 4d} pending, {: 4d} error, {: 4d} lost".format(
-                num_running, num_pending, num_error, num_lost,
+        sl.info("Starting map()")
+        sl.debug("qsub_path: {:s}".format(self.qsub_path))
+        sl.debug("qstat_path: {:s}".format(self.qstat_path))
+        sl.debug("qdel_path: {:s}".format(self.qdel_path))
+        sl.debug("queue_name: {:s}".format(str(self.queue_name)))
+        sl.debug("python_path: {:s}".format(self.python_path))
+        sl.debug(
+            "polling-interval for qstat: {:f}s".format(
+                self.polling_interval_qstat
             )
         )
+        sl.debug(
+            "max. num. resubmissions: {:d}".format(self.max_num_resubmissions)
+        )
+        sl.debug(
+            "error-state-indicator: {:s}".format(self.error_state_indicator)
+        )
+        sl.info("Making work_dir {:s}".format(swd))
+        os.makedirs(swd)
 
-        for job in jobs_error:
-            idx = _idx_from_JB_name(job["JB_name"])
-            if idx in num_resubmissions_by_idx:
-                num_resubmissions_by_idx[idx] += 1
-            else:
-                num_resubmissions_by_idx[idx] = 1
+        script_path = os.path.join(swd, "worker_node_script.py")
+        sl.debug("Writing worker-node-script: {:s}".format(script_path))
+        worker_node_script_str = _make_worker_node_script(
+            module_name=function.__module__,
+            function_name=function.__name__,
+            environ=dict(os.environ),
+        )
+        nfs.write(content=worker_node_script_str, path=script_path, mode="wt")
+        _make_path_executable(path=script_path)
 
-            job_id_str = "JB_name {:s}, JB_job_number {:s}, idx {:09d}".format(
-                job["JB_name"], job["JB_job_number"], idx
-            )
-            logger.warning("Found error-state in: {:s}".format(job_id_str))
-            logger.warning("Deleting: {:s}".format(job_id_str))
+        sl.info("Bundle jobs")
+        bundles = bundle_jobs(jobs=jobs, num_bundles=self.num_bundles)
 
-            _qdel(
-                JB_job_number=job["JB_job_number"],
-                qdel_path=qdel_path,
-                logger=logger,
-            )
-
-            if num_resubmissions_by_idx[idx] <= max_num_resubmissions:
-                logger.warning(
-                    "Resubmitting {:d} of {:d}, JB_name {:s}".format(
-                        num_resubmissions_by_idx[idx],
-                        max_num_resubmissions,
-                        job["JB_name"],
-                    )
-                )
-                _qsub(
-                    qsub_path=qsub_path,
-                    queue_name=queue_name,
-                    script_exe_path=python_path,
-                    script_path=script_path,
-                    arguments=[_job_path(work_dir, idx)],
-                    JB_name=job["JB_name"],
-                    stdout_path=_job_path(work_dir, idx) + ".o",
-                    stderr_path=_job_path(work_dir, idx) + ".e",
-                    logger=logger,
-                )
-
-        if jobs_error:
+        sl.info("Mapping jobs into work_dir")
+        JB_names_in_session = []
+        for idx, bundle in enumerate(bundles):
+            JB_name = _make_JB_name(session_id=session_id, idx=idx)
+            JB_names_in_session.append(JB_name)
             nfs.write(
-                content=json.dumps(num_resubmissions_by_idx, indent=4),
-                path=os.path.join(work_dir, "num_resubmissions_by_idx.json"),
-                mode="wt",
+                content=pickle.dumps(bundle),
+                path=_job_path(swd, idx),
+                mode="wb",
             )
 
-        if num_running == 0 and num_pending == 0:
-            still_running = False
+        sl.info("Submitting jobs")
 
-        time.sleep(polling_interval_qstat)
-
-    logger.info("Reducing results from work_dir")
-
-    job_results = []
-    results_are_incomplete = False
-
-    for idx, bundle in enumerate(bundles):
-        num_jobs_in_bundle = len(bundle)
-        bundle_result_path = _job_path(work_dir, idx) + ".out"
-
-        try:
-            bundle_result = pickle.loads(
-                nfs.read(path=bundle_result_path, mode="rb")
+        for JB_name in JB_names_in_session:
+            idx = _idx_from_JB_name(JB_name)
+            _qsub(
+                qsub_path=self.qsub_path,
+                queue_name=self.queue_name,
+                script_exe_path=self.python_path,
+                script_path=script_path,
+                arguments=[_job_path(swd, idx)],
+                JB_name=JB_name,
+                stdout_path=_job_path(swd, idx) + ".o",
+                stderr_path=_job_path(swd, idx) + ".e",
+                logger=self.logger,
             )
-            for job_result in bundle_result:
-                job_results.append(job_result)
-        except FileNotFoundError:
-            results_are_incomplete = True
-            logger.warning("No result: {:s}".format(bundle_result_path))
-            job_results += [None for i in range(num_jobs_in_bundle)]
 
-    has_stderr = False
-    if _has_invalid_or_non_empty_stderr(work_dir=work_dir, num_jobs=len(jobs)):
-        has_stderr = True
-        logger.warning("Found non zero stderr")
+        sl.info("Waiting for jobs to finish")
 
-    if has_stderr or keep_work_dir or results_are_incomplete:
-        logger.warning("Keeping work_dir: {:s}".format(work_dir))
-    else:
-        logger.info("Removing work_dir: {:s}".format(work_dir))
-        shutil.rmtree(work_dir)
+        JB_names_in_session_set = set(JB_names_in_session)
+        still_running = True
+        num_resubmissions_by_idx = {}
+        while still_running:
+            (
+                jobs_running,
+                jobs_pending,
+                jobs_error,
+            ) = _jobs_running_pending_error(
+                JB_names_set=JB_names_in_session_set,
+                error_state_indicator=self.error_state_indicator,
+                qstat_path=self.qstat_path,
+                logger=self.logger,
+            )
+            num_running = len(jobs_running)
+            num_pending = len(jobs_pending)
+            num_error = len(jobs_error)
+            num_lost = 0
+            for idx in num_resubmissions_by_idx:
+                if num_resubmissions_by_idx[idx] >= self.max_num_resubmissions:
+                    num_lost += 1
 
-    logger.info("Stopping map()")
+            sl.info(
+                "{: 4d} running, {: 4d} pending, {: 4d} error, {: 4d} lost".format(
+                    num_running, num_pending, num_error, num_lost,
+                )
+            )
 
-    return job_results
+            for job in jobs_error:
+                idx = _idx_from_JB_name(job["JB_name"])
+                if idx in num_resubmissions_by_idx:
+                    num_resubmissions_by_idx[idx] += 1
+                else:
+                    num_resubmissions_by_idx[idx] = 1
+
+                job_id_str = "JB_name {:s}, JB_job_number {:s}, idx {:09d}".format(
+                    job["JB_name"], job["JB_job_number"], idx
+                )
+                sl.warning("Found error-state in: {:s}".format(job_id_str))
+                sl.warning("Deleting: {:s}".format(job_id_str))
+
+                _qdel(
+                    JB_job_number=job["JB_job_number"],
+                    qdel_path=self.qdel_path,
+                    logger=self.logger,
+                )
+
+                if num_resubmissions_by_idx[idx] <= self.max_num_resubmissions:
+                    sl.warning(
+                        "Resubmitting {:d} of {:d}, JB_name {:s}".format(
+                            num_resubmissions_by_idx[idx],
+                            self.max_num_resubmissions,
+                            job["JB_name"],
+                        )
+                    )
+                    _qsub(
+                        qsub_path=self.qsub_path,
+                        queue_name=self.queue_name,
+                        script_exe_path=self.python_path,
+                        script_path=script_path,
+                        arguments=[_job_path(swd, idx)],
+                        JB_name=job["JB_name"],
+                        stdout_path=_job_path(swd, idx) + ".o",
+                        stderr_path=_job_path(swd, idx) + ".e",
+                        logger=self.logger,
+                    )
+
+            if jobs_error:
+                nfs.write(
+                    content=json.dumps(num_resubmissions_by_idx, indent=4),
+                    path=os.path.join(swd, "num_resubmissions_by_idx.json"),
+                    mode="wt",
+                )
+
+            if num_running == 0 and num_pending == 0:
+                still_running = False
+
+            time.sleep(self.polling_interval_qstat)
+
+        sl.info("Reducing results from work_dir")
+
+        job_results = []
+        results_are_incomplete = False
+
+        for idx, bundle in enumerate(bundles):
+            num_jobs_in_bundle = len(bundle)
+            bundle_result_path = _job_path(swd, idx) + ".out"
+
+            try:
+                bundle_result = pickle.loads(
+                    nfs.read(path=bundle_result_path, mode="rb")
+                )
+                for job_result in bundle_result:
+                    job_results.append(job_result)
+            except FileNotFoundError:
+                results_are_incomplete = True
+                sl.warning("No result: {:s}".format(bundle_result_path))
+                job_results += [None for i in range(num_jobs_in_bundle)]
+
+        has_stderr = False
+        if _has_invalid_or_non_empty_stderr(work_dir=swd, num_jobs=len(jobs)):
+            has_stderr = True
+            sl.warning("Found non zero stderr")
+
+        if has_stderr or self.keep_work_dir or results_are_incomplete:
+            sl.warning("Keeping work_dir: {:s}".format(swd))
+        else:
+            sl.info("Removing work_dir: {:s}".format(swd))
+            shutil.rmtree(swd)
+
+        sl.info("Stopping map()")
+
+        return job_results
