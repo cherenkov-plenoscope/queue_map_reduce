@@ -9,12 +9,9 @@ Queues for batch-jobs are a powerful tool to distribute your compute-jobs over m
 .. code:: python
 
     import queue_map_reduce as qmr
-    import numpy
 
-    results = qmr.map(
-        function=numpy.sum,
-        jobs=[numpy.arange(i, 100+i) for i in range(10)]
-    )
+    pool = qmr.Pool()
+    results = pool.map(sum, [[1, 2], [2, 3], [4, 5], ])
 
 A drop-in-replacement for the standard's ``map()``, and ``multiprocessing.Pool()``'s ``map()``.
 
@@ -104,7 +101,7 @@ Identifying jobs
 
 Environment Variables
 ---------------------
-All the user's environment-variables in the process where ``queue_map_reduce.map()`` is called will be exported in the job's context.
+All the user's environment-variables in the process where ``map()`` is called will be exported in the job's context.
 
 The worker-node-script sets the environment-variables before calling ``function(job)``. We do not use ``qsub``'s argument ``-V`` because on some clusters this will not set all variables. Apparently some administrators fear security issues when using ``qsub -V`` to set ``LD_LIBRARY_PATH``.
 
