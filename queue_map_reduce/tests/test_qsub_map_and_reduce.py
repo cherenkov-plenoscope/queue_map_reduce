@@ -131,20 +131,27 @@ def test_one_bad_job_creating_stderr():
         assert os.path.exists(os.path.join(tmp, "my_work_dir"))
 
 
-def test_minimal_example():
-    dummy.init_queue_state(path=dummy.QUEUE_STATE_PATH)
-    pool = qmr.Pool(
-        polling_interval_qstat=1e-3,
-        qsub_path=dummy.QSUB_PATH,
-        qstat_path=dummy.QSTAT_PATH,
-        qdel_path=dummy.QDEL_PATH,
-    )
-    results = pool.map(
-        function=numpy.sum,
-        jobs=[numpy.arange(i, 100 + i) for i in range(10)],
-    )
+def test_bundling_many_jobs():
+    with tempfile.TemporaryDirectory(prefix="sge") as tmp:
+        dummy.init_queue_state(path=dummy.QUEUE_STATE_PATH)
 
-    assert len(results) == 10
-    jobs = [numpy.arange(i, 100 + i) for i in range(10)]
-    for idx in range(len(results)):
-        assert results[idx] == numpy.sum(jobs[idx])
+        num_many_jobs = 120
+
+        jobs = []
+        for i in range(num_many_jobs):
+            job = [i, i + 1, i + 2]
+            jobs.append(job)
+
+        pool = qmr.Pool(
+            polling_interval_qstat=1e-3,
+            qsub_path=dummy.QSUB_PATH,
+            qstat_path=dummy.QSTAT_PATH,
+            qdel_path=dummy.QDEL_PATH,
+            work_dir=os.path.join(tmp, "my_work_dir"),
+            num_bundles=7,
+        )
+        results = pool.map(function=numpy.sum, jobs=jobs)
+
+        assert len(results) == num_many_jobs
+        for i in range(len(results)):
+            assert results[i] == numpy.sum(jobs[i])
