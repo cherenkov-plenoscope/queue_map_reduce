@@ -43,7 +43,7 @@ def test_run_with_failing_job():
             error_state_indicator="E",
         )
 
-        results = pool.map(function=np.sum, jobs=jobs,)
+        results = pool.map(func=np.sum, jobs=jobs,)
 
         for i in range(NUM_JOBS):
             assert results[i] == np.sum(jobs[i])

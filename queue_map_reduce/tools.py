@@ -12,7 +12,7 @@ import math
 from . import network_file_system as nfs
 
 
-def _make_worker_node_script(module_name, function_name, environ):
+def _make_worker_node_script(func_module, func_name, environ):
     """
     Returns a string that is a python-script.
     This python-script will be executed on the worker-node.
@@ -44,7 +44,7 @@ def _make_worker_node_script(module_name, function_name, environ):
         "# I was generated automatically by queue_map_reduce.\n"
         "# I will be executed on the worker-nodes.\n"
         "# Do not modify me.\n"
-        "from {module_name:s} import {function_name:s}\n"
+        "from {func_module:s} import {func_name:s}\n"
         "import pickle\n"
         "import sys\n"
         "import os\n"
@@ -57,7 +57,7 @@ def _make_worker_node_script(module_name, function_name, environ):
         "job_results = []\n"
         "for j, job in enumerate(chunk):\n"
         "    try:\n"
-        "        job_result = {function_name:s}(job)\n"
+        "        job_result = {func_name:s}(job)\n"
         "    except Exception as bad:\n"
         '        print("[job ", j, ", in chunk]", file=sys.stderr)\n'
         "        print(bad, file=sys.stderr)\n"
@@ -66,8 +66,8 @@ def _make_worker_node_script(module_name, function_name, environ):
         "\n"
         'nfs.write(pickle.dumps(job_results), sys.argv[1]+".out", mode="wb")\n'
         "".format(
-            module_name=module_name,
-            function_name=function_name,
+            func_module=func_module,
+            func_name=func_name,
             add_environ=add_environ,
         )
     )
@@ -371,20 +371,20 @@ class Pool:
     def __repr__(self):
         return self.__class__.__name__ + "()"
 
-    def map(self, function, jobs):
+    def map(self, func, jobs):
         """
-        Maps jobs to a function.
+        Maps jobs to function 'func'.
         Both jobs and results must be serializable using pickle.
-        The function must be part of a python-module.
+        'func' must be part of a python-module.
 
         Parameters
         ----------
-        function : function-pointer
+        func : function-pointer
             Pointer to a function in a python-module. It must have both:
-            function.__module__
-            function.__name__
+            func.__module__
+            func.__name__
         jobs : list
-            List of jobs. A job in the list must be a valid input to function.
+            List of jobs. A job in the list must be a valid input to 'func'.
 
         Returns
         -------
@@ -429,8 +429,8 @@ class Pool:
         sl.debug("Writing worker-node-script: {:s}".format(script_path))
 
         worker_node_script_str = _make_worker_node_script(
-            module_name=function.__module__,
-            function_name=function.__name__,
+            func_module=func.__module__,
+            func_name=func.__name__,
             environ=dict(os.environ),
         )
         nfs.write(content=worker_node_script_str, path=script_path, mode="wt")

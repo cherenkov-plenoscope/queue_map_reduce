@@ -9,12 +9,12 @@ import subprocess
 
 
 NUM_JOBS = 10
-GOOD_FUNCTION = numpy.sum
+GOOD_FUNC = numpy.sum
 GOOD_JOBS = []
 for i in range(NUM_JOBS):
     work = numpy.arange(i, i + 100)
     GOOD_JOBS.append(work)
-BAD_FUNCTION = os.path.join
+BAD_FUNC = os.path.join
 
 
 def test_import():
@@ -24,13 +24,11 @@ def test_import():
 def test_make_worker_node_script():
     with tempfile.TemporaryDirectory(prefix="sge") as tmp:
         bundle = [numpy.arange(100)]
-        function = numpy.sum
+        func = numpy.sum
         with open(os.path.join(tmp, "bundle.pkl"), "wb") as f:
             f.write(pickle.dumps(bundle))
         s = qmr_tools._make_worker_node_script(
-            module_name=function.__module__,
-            function_name=function.__name__,
-            environ={},
+            func_module=func.__module__, func_name=func.__name__, environ={},
         )
         with open(os.path.join(tmp, "worker_node_script.py"), "wt") as f:
             f.write(s)
@@ -45,11 +43,11 @@ def test_make_worker_node_script():
         assert os.path.exists(os.path.join(tmp, "bundle.pkl") + ".out")
         with open(os.path.join(tmp, "bundle.pkl") + ".out", "rb") as f:
             result = pickle.loads(f.read())
-        assert result == function(bundle[0])
+        assert result == func(bundle[0])
 
 
 def test_full_chain():
-    function = GOOD_FUNCTION
+    func = GOOD_FUNC
     jobs = GOOD_JOBS
 
     with tempfile.TemporaryDirectory(prefix="sge") as tmp:
@@ -61,11 +59,11 @@ def test_full_chain():
             qstat_path=dummy.QSTAT_PATH,
             qdel_path=dummy.QDEL_PATH,
         )
-        results = pool.map(function=function, jobs=jobs)
+        results = pool.map(func=func, jobs=jobs)
 
         assert len(results) == NUM_JOBS
         for i in range(NUM_JOBS):
-            assert results[i] == function(jobs[i])
+            assert results[i] == func(jobs[i])
 
 
 def test_force_dump_tmp_dir():
@@ -79,11 +77,11 @@ def test_force_dump_tmp_dir():
             qstat_path=dummy.QSTAT_PATH,
             qdel_path=dummy.QDEL_PATH,
         )
-        results = pool.map(function=GOOD_FUNCTION, jobs=GOOD_JOBS,)
+        results = pool.map(func=GOOD_FUNC, jobs=GOOD_JOBS,)
         assert os.path.exists(os.path.join(tmp, "my_work_dir"))
 
 
-def test_bad_function_creating_stderr():
+def test_BAD_FUNC_creating_stderr():
     with tempfile.TemporaryDirectory(prefix="sge") as tmp:
         dummy.init_queue_state(path=dummy.QUEUE_STATE_PATH)
         pool = qmr.Pool(
@@ -93,7 +91,7 @@ def test_bad_function_creating_stderr():
             qstat_path=dummy.QSTAT_PATH,
             qdel_path=dummy.QDEL_PATH,
         )
-        results = pool.map(function=BAD_FUNCTION, jobs=GOOD_JOBS)
+        results = pool.map(func=BAD_FUNC, jobs=GOOD_JOBS)
         assert len(results) == NUM_JOBS
         for r in results:
             assert r is None
@@ -113,11 +111,11 @@ def test_one_bad_job_creating_stderr():
             qstat_path=dummy.QSTAT_PATH,
             qdel_path=dummy.QDEL_PATH,
         )
-        results = pool.map(function=GOOD_FUNCTION, jobs=bad_jobs,)
+        results = pool.map(func=GOOD_FUNC, jobs=bad_jobs,)
 
         assert len(results) == NUM_JOBS + 1
         for idx in range(NUM_JOBS):
-            assert results[idx] == GOOD_FUNCTION(GOOD_JOBS[idx])
+            assert results[idx] == GOOD_FUNC(GOOD_JOBS[idx])
         assert results[idx + 1] is None
         assert os.path.exists(os.path.join(tmp, "my_work_dir"))
 
@@ -141,7 +139,7 @@ def test_bundling_many_jobs():
             work_dir=os.path.join(tmp, "my_work_dir"),
             num_chunks=7,
         )
-        results = pool.map(function=numpy.sum, jobs=jobs)
+        results = pool.map(func=numpy.sum, jobs=jobs)
 
         assert len(results) == num_many_jobs
         for i in range(len(results)):
