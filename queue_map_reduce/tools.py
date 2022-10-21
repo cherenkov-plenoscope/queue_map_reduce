@@ -140,9 +140,9 @@ def _idx_from_JB_name(JB_name):
     return int(idx_str)
 
 
-def _has_invalid_or_non_empty_stderr(work_dir, num_jobs):
+def _has_invalid_or_non_empty_stderr(work_dir, num_bundles):
     has_errors = False
-    for idx in range(num_jobs):
+    for idx in range(num_bundles):
         e_path = _job_path(work_dir, idx) + ".e"
         try:
             if os.stat(e_path).st_size != 0:
@@ -241,26 +241,24 @@ def _jobs_running_pending_error(
     )
 
 
-def bundle_jobs(jobs, num_bundles=None):
+def assign_jobs_to_bundles(num_jobs, num_bundles):
     """
     When you have too many jobs for your parallel processing queue this
     function bundles multiple jobs into fewer bundles.
 
     Parameters
     ----------
-    jobs : list
-        Your jobs.
+    num_jobs : int
+        Number of jobs.
     num_bundles : int (optional)
         The maximum number of bundles. Your jobs will be spread over
         these many bundles. If None, each bundle contains a single job.
 
     Returns
     -------
-        A list of bundles where each bundle is a list of jobs.
+        A list of bundles where each bundle is a list of job-indices.
         The lengths of the list of bundles is <= num_bundles.
     """
-    num_jobs = len(jobs)
-
     if num_bundles is None:
         num_jobs_in_bundle = 1
     else:
@@ -271,14 +269,36 @@ def bundle_jobs(jobs, num_bundles=None):
     current_bundle = []
     for j in range(num_jobs):
         if len(current_bundle) < num_jobs_in_bundle:
-            current_bundle.append(jobs[j])
+            current_bundle.append(j)
         else:
             bundles.append(current_bundle)
             current_bundle = []
-            current_bundle.append(jobs[j])
+            current_bundle.append(j)
     if len(current_bundle):
         bundles.append(current_bundle)
     return bundles
+
+
+def _reduce_results(work_dir, bundles_of_jobs, logger):
+    job_results = []
+    job_results_are_incomplete = False
+
+    for idx, bundle_of_jobs in enumerate(bundles_of_jobs):
+        num_jobs_in_bundle = len(bundle_of_jobs)
+        bundle_result_path = _job_path(work_dir, idx) + ".out"
+
+        try:
+            bundle_result = pickle.loads(
+                nfs.read(path=bundle_result_path, mode="rb")
+            )
+            for job_result in bundle_result:
+                job_results.append(job_result)
+        except FileNotFoundError:
+            job_results_are_incomplete = True
+            logger.warning("No result: {:s}".format(bundle_result_path))
+            job_results += [None for i in range(num_jobs_in_bundle)]
+
+    return job_results_are_incomplete, job_results
 
 
 class Pool:
@@ -413,13 +433,17 @@ class Pool:
         _make_path_executable(path=script_path)
 
         sl.info("Bundle jobs")
-        bundles = bundle_jobs(jobs=jobs, num_bundles=self.num_bundles)
+        bundles_of_jobs = assign_jobs_to_bundles(
+            num_jobs=len(jobs),
+            num_bundles=self.num_bundles,
+        )
 
         sl.info("Mapping jobs into work_dir")
         JB_names_in_session = []
-        for idx, bundle in enumerate(bundles):
+        for idx, bundle_of_jobs in enumerate(bundles_of_jobs):
             JB_name = _make_JB_name(session_id=session_id, idx=idx)
             JB_names_in_session.append(JB_name)
+            bundle = [jobs[j] for j in bundle_of_jobs]
             nfs.write(
                 content=pickle.dumps(bundle),
                 path=_job_path(swd, idx),
@@ -524,31 +548,18 @@ class Pool:
             time.sleep(self.polling_interval_qstat)
 
         sl.info("Reducing results from work_dir")
-
-        job_results = []
-        results_are_incomplete = False
-
-        for idx, bundle in enumerate(bundles):
-            num_jobs_in_bundle = len(bundle)
-            bundle_result_path = _job_path(swd, idx) + ".out"
-
-            try:
-                bundle_result = pickle.loads(
-                    nfs.read(path=bundle_result_path, mode="rb")
-                )
-                for job_result in bundle_result:
-                    job_results.append(job_result)
-            except FileNotFoundError:
-                results_are_incomplete = True
-                sl.warning("No result: {:s}".format(bundle_result_path))
-                job_results += [None for i in range(num_jobs_in_bundle)]
+        job_results_are_incomplete, job_results = _reduce_results(
+            work_dir=swd,
+            bundles_of_jobs=bundles_of_jobs,
+            logger=sl,
+        )
 
         has_stderr = False
-        if _has_invalid_or_non_empty_stderr(work_dir=swd, num_jobs=len(jobs)):
+        if _has_invalid_or_non_empty_stderr(work_dir=swd, num_bundles=len(bundles_of_jobs)):
             has_stderr = True
             sl.warning("Found non zero stderr")
 
-        if has_stderr or self.keep_work_dir or results_are_incomplete:
+        if has_stderr or self.keep_work_dir or job_results_are_incomplete:
             sl.warning("Keeping work_dir: {:s}".format(swd))
         else:
             sl.info("Removing work_dir: {:s}".format(swd))
