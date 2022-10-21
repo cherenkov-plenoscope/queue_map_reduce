@@ -27,10 +27,10 @@ def test_run_with_failing_job():
 
         NUM_JOBS = 30
 
-        jobs = []
+        tasks = []
         for i in range(NUM_JOBS):
-            job = np.arange(0, 100)
-            jobs.append(job)
+            task = np.arange(0, 100)
+            tasks.append(task)
 
         pool = qmr.Pool(
             polling_interval_qstat=0.1,
@@ -43,7 +43,7 @@ def test_run_with_failing_job():
             error_state_indicator="E",
         )
 
-        results = pool.map(func=np.sum, jobs=jobs,)
+        results = pool.map(func=np.sum, iterable=tasks)
 
         for i in range(NUM_JOBS):
-            assert results[i] == np.sum(jobs[i])
+            assert results[i] == np.sum(tasks[i])

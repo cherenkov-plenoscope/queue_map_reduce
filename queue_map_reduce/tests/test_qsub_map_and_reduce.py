@@ -8,12 +8,12 @@ import os
 import subprocess
 
 
-NUM_JOBS = 10
+NUM_TASKS = 10
 GOOD_FUNC = numpy.sum
-GOOD_JOBS = []
-for i in range(NUM_JOBS):
+GOOD_TASKS = []
+for i in range(NUM_TASKS):
     work = numpy.arange(i, i + 100)
-    GOOD_JOBS.append(work)
+    GOOD_TASKS.append(work)
 BAD_FUNC = os.path.join
 
 
@@ -48,7 +48,7 @@ def test_make_worker_node_script():
 
 def test_full_chain():
     func = GOOD_FUNC
-    jobs = GOOD_JOBS
+    tasks = GOOD_TASKS
 
     with tempfile.TemporaryDirectory(prefix="sge") as tmp:
         dummy.init_queue_state(path=dummy.QUEUE_STATE_PATH)
@@ -59,11 +59,11 @@ def test_full_chain():
             qstat_path=dummy.QSTAT_PATH,
             qdel_path=dummy.QDEL_PATH,
         )
-        results = pool.map(func=func, jobs=jobs)
+        results = pool.map(func=func, iterable=tasks)
 
-        assert len(results) == NUM_JOBS
-        for i in range(NUM_JOBS):
-            assert results[i] == func(jobs[i])
+        assert len(results) == NUM_TASKS
+        for i in range(NUM_TASKS):
+            assert results[i] == func(tasks[i])
 
 
 def test_force_dump_tmp_dir():
@@ -77,7 +77,7 @@ def test_force_dump_tmp_dir():
             qstat_path=dummy.QSTAT_PATH,
             qdel_path=dummy.QDEL_PATH,
         )
-        results = pool.map(func=GOOD_FUNC, jobs=GOOD_JOBS,)
+        results = pool.map(func=GOOD_FUNC, iterable=GOOD_TASKS,)
         assert os.path.exists(os.path.join(tmp, "my_work_dir"))
 
 
@@ -91,17 +91,17 @@ def test_BAD_FUNC_creating_stderr():
             qstat_path=dummy.QSTAT_PATH,
             qdel_path=dummy.QDEL_PATH,
         )
-        results = pool.map(func=BAD_FUNC, jobs=GOOD_JOBS)
-        assert len(results) == NUM_JOBS
+        results = pool.map(func=BAD_FUNC, iterable=GOOD_TASKS)
+        assert len(results) == NUM_TASKS
         for r in results:
             assert r is None
         assert os.path.exists(os.path.join(tmp, "my_work_dir"))
 
 
-def test_one_bad_job_creating_stderr():
+def test_one_bad_task_creating_stderr():
     with tempfile.TemporaryDirectory(prefix="sge") as tmp:
-        bad_jobs = GOOD_JOBS.copy()
-        bad_jobs.append("np.sum will not work for me.")
+        bad_tasks = GOOD_TASKS.copy()
+        bad_tasks.append("np.sum will not work for me.")
 
         dummy.init_queue_state(path=dummy.QUEUE_STATE_PATH)
         pool = qmr.Pool(
@@ -111,25 +111,25 @@ def test_one_bad_job_creating_stderr():
             qstat_path=dummy.QSTAT_PATH,
             qdel_path=dummy.QDEL_PATH,
         )
-        results = pool.map(func=GOOD_FUNC, jobs=bad_jobs,)
+        results = pool.map(func=GOOD_FUNC, iterable=bad_tasks)
 
-        assert len(results) == NUM_JOBS + 1
-        for idx in range(NUM_JOBS):
-            assert results[idx] == GOOD_FUNC(GOOD_JOBS[idx])
-        assert results[idx + 1] is None
+        assert len(results) == NUM_TASKS + 1
+        for itask in range(NUM_TASKS):
+            assert results[itask] == GOOD_FUNC(GOOD_TASKS[itask])
+        assert results[itask + 1] is None
         assert os.path.exists(os.path.join(tmp, "my_work_dir"))
 
 
-def test_bundling_many_jobs():
+def test_bundling_many_tasks():
     with tempfile.TemporaryDirectory(prefix="sge") as tmp:
         dummy.init_queue_state(path=dummy.QUEUE_STATE_PATH)
 
-        num_many_jobs = 120
+        num_many_tasks = 120
 
-        jobs = []
-        for i in range(num_many_jobs):
-            job = [i, i + 1, i + 2]
-            jobs.append(job)
+        tasks = []
+        for i in range(num_many_tasks):
+            task = [i, i + 1, i + 2]
+            tasks.append(task)
 
         pool = qmr.Pool(
             polling_interval_qstat=1e-3,
@@ -139,8 +139,8 @@ def test_bundling_many_jobs():
             work_dir=os.path.join(tmp, "my_work_dir"),
             num_chunks=7,
         )
-        results = pool.map(func=numpy.sum, jobs=jobs)
+        results = pool.map(func=numpy.sum, iterable=tasks)
 
-        assert len(results) == num_many_jobs
+        assert len(results) == num_many_tasks
         for i in range(len(results)):
-            assert results[i] == numpy.sum(jobs[i])
+            assert results[i] == numpy.sum(tasks[i])

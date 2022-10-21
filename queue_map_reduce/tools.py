@@ -17,8 +17,8 @@ def _make_worker_node_script(func_module, func_name, environ):
     Returns a string that is a python-script.
     This python-script will be executed on the worker-node.
     In here, the environment variables are set explicitly.
-    It reads the job, runs result = function(job), and writes the result.
-    The script will be called on the worker-node with a single argument:
+    It reads the chunk of tasks, runs result = func(task), and writes the
+    result. The script is called on the worker-node with a single argument:
 
     python script.py /some/path/to/work_dir/{ichunk:09d}.pkl
 
@@ -54,17 +54,17 @@ def _make_worker_node_script(func_module, func_name, environ):
         "\n"
         "assert(len(sys.argv) == 2)\n"
         'chunk = pickle.loads(nfs.read(sys.argv[1], mode="rb"))\n'
-        "job_results = []\n"
-        "for j, job in enumerate(chunk):\n"
+        "task_results = []\n"
+        "for j, task in enumerate(chunk):\n"
         "    try:\n"
-        "        job_result = {func_name:s}(job)\n"
+        "        task_result = {func_name:s}(task)\n"
         "    except Exception as bad:\n"
-        '        print("[job ", j, ", in chunk]", file=sys.stderr)\n'
+        '        print("[task ", j, ", in chunk]", file=sys.stderr)\n'
         "        print(bad, file=sys.stderr)\n"
-        "        job_result = None\n"
-        "    job_results.append(job_result)\n"
+        "        task_result = None\n"
+        "    task_results.append(task_result)\n"
         "\n"
-        'nfs.write(pickle.dumps(job_results), sys.argv[1]+".out", mode="wb")\n'
+        'nfs.write(pickle.dumps(task_results), sys.argv[1]+".out", mode="wb")\n'
         "".format(
             func_module=func_module,
             func_name=func_name,
@@ -241,34 +241,34 @@ def _jobs_running_pending_error(
     )
 
 
-def assign_jobs_to_chunks(num_jobs, num_chunks):
+def assign_tasks_to_chunks(num_tasks, num_chunks):
     """
-    When you have too many jobs for your parallel processing queue this
-    function chunks multiple jobs into fewer chunks.
+    When you have too many tasks for your parallel processing queue this
+    function chunks multiple tasks into fewer chunks.
 
     Parameters
     ----------
-    num_jobs : int
-        Number of jobs.
+    num_tasks : int
+        Number of tasks.
     num_chunks : int (optional)
-        The maximum number of chunks. Your jobs will be spread over
-        these many chunks. If None, each chunk contains a single job.
+        The maximum number of chunks. Your tasks will be spread over
+        these many chunks. If None, each chunk contains a single task.
 
     Returns
     -------
-        A list of chunks where each chunk is a list of job-indices.
+        A list of chunks where each chunk is a list of task-indices `itask`.
         The lengths of the list of chunks is <= num_chunks.
     """
     if num_chunks is None:
-        num_jobs_in_chunk = 1
+        num_tasks_in_chunk = 1
     else:
         assert num_chunks > 0
-        num_jobs_in_chunk = int(math.ceil(num_jobs / num_chunks))
+        num_tasks_in_chunk = int(math.ceil(num_tasks / num_chunks))
 
     chunks = []
     current_chunk = []
-    for j in range(num_jobs):
-        if len(current_chunk) < num_jobs_in_chunk:
+    for j in range(num_tasks):
+        if len(current_chunk) < num_tasks_in_chunk:
             current_chunk.append(j)
         else:
             chunks.append(current_chunk)
@@ -280,25 +280,25 @@ def assign_jobs_to_chunks(num_jobs, num_chunks):
 
 
 def _reduce_results(work_dir, chunks, logger):
-    job_results = []
-    job_results_are_incomplete = False
+    task_results = []
+    task_results_are_incomplete = False
 
-    for ichunk, chunk_of_jobs in enumerate(chunks):
-        num_jobs_in_chunk = len(chunk_of_jobs)
+    for ichunk, chunk in enumerate(chunks):
+        num_tasks_in_chunk = len(chunk)
         chunk_result_path = _chunk_path(work_dir, ichunk) + ".out"
 
         try:
             chunk_result = pickle.loads(
                 nfs.read(path=chunk_result_path, mode="rb")
             )
-            for job_result in chunk_result:
-                job_results.append(job_result)
+            for task_result in chunk_result:
+                task_results.append(task_result)
         except FileNotFoundError:
-            job_results_are_incomplete = True
+            task_results_are_incomplete = True
             logger.warning("No result: {:s}".format(chunk_result_path))
-            job_results += [None for i in range(num_jobs_in_chunk)]
+            task_results += [None for i in range(num_tasks_in_chunk)]
 
-    return job_results_are_incomplete, job_results
+    return task_results_are_incomplete, task_results
 
 
 class Pool:
@@ -325,31 +325,31 @@ class Pool:
         Parameters
         ----------
         queue_name : string, optional
-            Name of the queue to submit jobs to.
+            Name of the queue.
         python_path : string, optional
             The python path to be used on the computing-cluster's worker-nodes
             to execute the worker-node's python-script.
         polling_interval_qstat : float, optional
             The time in seconds to wait before polling qstat again while
-            waiting for the jobs to finish.
+            waiting for the queue-jobs to finish.
         work_dir : string, optional
-            The directory path where the jobs, the results and the
+            The directory path where the tasks, the results and the
             worker-node-script is stored.
         keep_work_dir : bool, optional
             When True, the working directory will not be removed.
         max_num_resubmissions: int, optional
-            In case of error-state in job, the job will be tried this often to
-            be resubmitted befor giving up on it.
+            In case of error-state in queue-job, the job will be tried this
+            often to be resubmitted befor giving up on it.
         logger : logging.Logger(), optional
             Logger-instance from python's logging library. If None, a default
             logger is created which writes to sys.stdout.
         num_chunks : int, optional
-            If provided, the jobs will be grouped in this many chunks.
-            The jobs in a chunk are computed serial on the worker-node.
-            It is useful to chunk jobs when the number of jobs is much larger
+            If provided, the tasks are grouped in this many chunks.
+            The tasks in a chunk are computed in serial on the worker-node.
+            It is useful to chunk tasks when the number of tasks is much larger
             than the number of available slots for parallel computing and the
             start-up-time for a slot is not much smaller than the compute-time
-            for a job.
+            for a single task.
         """
 
         self.queue_name = queue_name
@@ -371,11 +371,10 @@ class Pool:
     def __repr__(self):
         return self.__class__.__name__ + "()"
 
-    def map(self, func, jobs):
+    def map(self, func, iterable):
         """
-        Maps jobs to function 'func'.
-        Both jobs and results must be serializable using pickle.
-        'func' must be part of a python-module.
+        Apply `func` to each element in `iterable`, collecting the results
+        in a list that is returned.
 
         Parameters
         ----------
@@ -383,18 +382,20 @@ class Pool:
             Pointer to a function in a python-module. It must have both:
             func.__module__
             func.__name__
-        jobs : list
-            List of jobs. A job in the list must be a valid input to 'func'.
+        iterable : list
+            List of tasks. Each task must be a valid input to 'func'.
 
         Returns
         -------
         results : list
-            A list of the results. One result for each job.
+            Results. One result for each task.
 
         Example
         -------
         results = pool.map(sum, [[1, 2], [2, 3], [4, 5], ])
         """
+
+        tasks = iterable
         sl = self.logger
         swd = self.work_dir
 
@@ -436,26 +437,26 @@ class Pool:
         nfs.write(content=worker_node_script_str, path=script_path, mode="wt")
         _make_path_executable(path=script_path)
 
-        sl.info("chunk jobs")
+        sl.info("Make chunks of tasks")
 
-        chunks = assign_jobs_to_chunks(
-            num_jobs=len(jobs), num_chunks=self.num_chunks,
+        chunks = assign_tasks_to_chunks(
+            num_tasks=len(tasks), num_chunks=self.num_chunks,
         )
 
-        sl.info("Mapping jobs into work_dir")
+        sl.info("Mapping chunks of tasks into work_dir")
 
         JB_names_in_session = []
         for ichunk, chunk in enumerate(chunks):
             JB_name = _make_JB_name(session_id=session_id, ichunk=ichunk)
             JB_names_in_session.append(JB_name)
-            chunk_payload = [jobs[j] for j in chunk]
+            chunk_payload = [tasks[itask] for itask in chunk]
             nfs.write(
                 content=pickle.dumps(chunk_payload),
                 path=_chunk_path(swd, ichunk),
                 mode="wb",
             )
 
-        sl.info("Submitting jobs")
+        sl.info("Submitting queue-jobs")
 
         for JB_name in JB_names_in_session:
             ichunk = _ichunk_from_JB_name(JB_name)
@@ -471,7 +472,7 @@ class Pool:
                 logger=self.logger,
             )
 
-        sl.info("Waiting for jobs to finish")
+        sl.info("Waiting for queue-jobs to finish")
 
         JB_names_in_session_set = set(JB_names_in_session)
         still_running = True
@@ -559,7 +560,7 @@ class Pool:
             time.sleep(self.polling_interval_qstat)
 
         sl.info("Reducing results from work_dir")
-        job_results_are_incomplete, job_results = _reduce_results(
+        task_results_are_incomplete, task_results = _reduce_results(
             work_dir=swd, chunks=chunks, logger=sl,
         )
 
@@ -570,7 +571,7 @@ class Pool:
             has_stderr = True
             sl.warning("Found non zero stderr")
 
-        if has_stderr or self.keep_work_dir or job_results_are_incomplete:
+        if has_stderr or self.keep_work_dir or task_results_are_incomplete:
             sl.warning("Keeping work_dir: {:s}".format(swd))
         else:
             sl.info("Removing work_dir: {:s}".format(swd))
@@ -578,4 +579,4 @@ class Pool:
 
         sl.info("Stopping map()")
 
-        return job_results
+        return task_results
