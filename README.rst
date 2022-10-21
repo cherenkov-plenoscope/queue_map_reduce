@@ -4,7 +4,7 @@ queue map reduce for python
 
 |TravisBuildStatus| |PyPIStatus| |BlackStyle|
 
-Queues for batch-jobs are a powerful tool to distribute your compute-jobs over multiple machines in parallel. This single function maps your jobs onto a queue, and reduces the results.
+Queues for batch-jobs distribute your compute-jobs over multiple machines in parallel. This pool maps your jobs onto a queue and reduces the results.
 
 .. code:: python
 
@@ -13,7 +13,7 @@ Queues for batch-jobs are a powerful tool to distribute your compute-jobs over m
     pool = qmr.Pool()
     results = pool.map(sum, [[1, 2], [2, 3], [4, 5], ])
 
-A drop-in-replacement for the standard's ``map()``, and ``multiprocessing.Pool()``'s ``map()``.
+A drop-in-replacement for builtins' ``map()``, and ``multiprocessing.Pool()``'s ``map()``.
 
 Requirements
 ============
@@ -24,48 +24,29 @@ Requirements
 
 - Your ``jobs`` and their ``results`` must be able to serialize using pickle.
 
-- All worker-nodes and the process-node itself running the ``map()`` must share a common path in the file-system were they can read and write.
+- Both worker-nodes and process-node can read and write from and to a common path in the file-system.
 
 Queue flavor
 ------------
-Different flavors of ``qsub``, ``qstat``, and ``qdel`` might have different interfaces. Tested flavors are:
+Tested flavors are:
 
 - Sun Grid Engine (SGE) 8.1.9
 
 Features
 ========
-- Only a single, stateless function ``map()``.
-
-- Jobs with error-state ``'E'`` can be deleted, and resubmitted until your predefined upper limit is reached.
-
-- Respecting fair-share, i.e. slots are only occupied when they run your jobs.
+- Respects fair-share, i.e. slots are only occupied when they run your jobs.
 
 - No spawning of additional threads. Neither on the process-node, nor on the worker-nodes.
 
 - No need for databases or web-servers.
 
-- Can bundle your jobs to process multiple jobs in serial on the process-node to avoid start-up-overhead with many small jobs.
+- Jobs with error-state ``'E'`` can be deleted, and resubmitted until your predefined upper limit is reached.
 
-Scope
-=====
-Our scope is intentionally limited to embarrassingly simple parallel computing with a ``map()`` function while
-
-we assume the user
-------------------
-
-- has to fair-share the queue with other users **all** the time.
-
-- can not login to worker-nodes, thus can not communicate with her jobs when these are running.
-
-- can only write to her own ``$HOME``.
-
-- has to build and install any dependency from source in her own ``$HOME`` with an old ``gcc``.
-
-- has a high error-rate because of jobs dying in resource-conflicts with other users.
+- Can bundle jobs on worker-nodes to avoid start-up-overhead with many small jobs.
 
 Alternatives
 ============
-When you do not share resources with other users, and when you have some administrative power than have a look at these:
+When you do not share resources with other users, and when you have some administrative power you might want to use one of these:
 
 - Dask_ has a ``job_queue`` which also supports other flavors such as PBS, SLURM.
 
@@ -75,19 +56,19 @@ When you do not share resources with other users, and when you have some adminis
 
 Inner workings
 ==============
-- Our ``map()`` makes a ``work_dir`` because the mapping and reduction takes place in the file-system. You can set ``work_dir`` manually to ensure it is in a common path of all worker-nodes and the process-node.
+- ``map()`` makes a ``work_dir`` because the mapping and reducing takes place in the file-system. You can set ``work_dir`` manually to make sure both worker-nodes and process-node can reach it.
 
-- Our ``map()`` serializes each of your ``jobs`` using ``pickle`` into a separate file in ``work_dir/{idx:09d}.pkl``.
+- ``map()`` serializes your ``jobs`` using ``pickle`` into separate files in ``work_dir/{idx:09d}.pkl``.
 
-- Our ``map()`` reads all environment-variables in its process.
+- ``map()`` reads all environment-variables in its process.
 
-- Our ``map()`` creates the worker-node-script in ``work_dir/worker_node_script.py``. It contains and exports the process' environment-variables into the batch-job's context. It reads the job in ``work_dir/{idx:09d}.pkl``, imports and runs your ``function(job)``, and finally writes the result back to ``work_dir/{idx:09d}.pkl.out``.
+- ``map()`` creates the worker-node-script in ``work_dir/worker_node_script.py``. It contains and exports the process' environment-variables into the batch-job's context. It reads the job in ``work_dir/{idx:09d}.pkl``, imports and runs your ``function(job)``, and finally writes the result back to ``work_dir/{idx:09d}.pkl.out``.
 
-- Our ``map()`` submits your jobs into the queue. The ``stdout`` and ``stderr`` of the jobs are written to ``work_dir/{idx:09d}.pkl.o`` and ``work_dir/{idx:09d}.pkl.e`` respectively. By default, ``shutil.which("python")`` is used to process the worker-node-script.
+- ``map()`` submits your jobs into the queue. The ``stdout`` and ``stderr`` of the jobs are written to ``work_dir/{idx:09d}.pkl.o`` and ``work_dir/{idx:09d}.pkl.e`` respectively. By default, ``shutil.which("python")`` is used to process the worker-node-script.
 
 - When all jobs are submitted, ``map()`` monitors the progress of its jobs. In case a job will run into an error-state, which is ``'E'`` by default, the job will be deleted and resubmitted until a maximum number of resubmissions is reached.
 
-- When no more jobs are running or pending, ``map()`` will reduce the results. It will read each result from ``work_dir/{idx:09d}.pkl.out`` and append it to the list of results.
+- When no more jobs are running or pending, ``map()`` will reduce the results from ``work_dir/{idx:09d}.pkl.out``.
 
 - In case of non zero ``stderr`` in any job, a missing result, or on the user's request, the ``work_dir`` will be kept for inspection. Otherwise its removed.
 
@@ -95,7 +76,7 @@ Identifying jobs
 ----------------
 - ``JB_job_number`` is assigned to your job by the queue-system for its own book-keeping.
 
-- ``JB_name`` is the name assigned to your job by our ``map()``. It is composed of the ``map()``'s session-name, and the ``idx`` of your job with respect to your lists of jobs. E.g. ``"q"%Y-%m-%dT%H:%M:%S"#{idx:09d}"``
+- ``JB_name`` is the name assigned to your job by our ``map()``. It is composed of the ``map()``'s session-id, and the ``idx`` of your job with respect to your lists of jobs. E.g. ``"q"%Y-%m-%dT%H:%M:%S"#{idx:09d}"``
 
 - ``idx`` is only used within our ``map()``. It is the index of your job with respect to your list of jobs. It is written into ``JB_name``, and it is the ``idx`` used to create the job's filenames such as ``work_dir/{idx:09d}.pkl``.
 
