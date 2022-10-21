@@ -79,10 +79,7 @@ def test_force_dump_tmp_dir():
             qstat_path=dummy.QSTAT_PATH,
             qdel_path=dummy.QDEL_PATH,
         )
-        results = pool.map(
-            function=GOOD_FUNCTION,
-            jobs=GOOD_JOBS,
-        )
+        results = pool.map(function=GOOD_FUNCTION, jobs=GOOD_JOBS,)
         assert os.path.exists(os.path.join(tmp, "my_work_dir"))
 
 
@@ -96,10 +93,7 @@ def test_bad_function_creating_stderr():
             qstat_path=dummy.QSTAT_PATH,
             qdel_path=dummy.QDEL_PATH,
         )
-        results = pool.map(
-            function=BAD_FUNCTION,
-            jobs=GOOD_JOBS
-        )
+        results = pool.map(function=BAD_FUNCTION, jobs=GOOD_JOBS)
         assert len(results) == NUM_JOBS
         for r in results:
             assert r is None
@@ -119,10 +113,7 @@ def test_one_bad_job_creating_stderr():
             qstat_path=dummy.QSTAT_PATH,
             qdel_path=dummy.QDEL_PATH,
         )
-        results = pool.map(
-            function=GOOD_FUNCTION,
-            jobs=bad_jobs,
-        )
+        results = pool.map(function=GOOD_FUNCTION, jobs=bad_jobs,)
 
         assert len(results) == NUM_JOBS + 1
         for idx in range(NUM_JOBS):

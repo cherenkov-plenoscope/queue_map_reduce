@@ -104,7 +104,7 @@ def _qsub(
         raise
 
 
-def _job_path(work_dir, idx):
+def _bundle_path(work_dir, idx):
     return os.path.abspath(os.path.join(work_dir, "{:09d}.pkl".format(idx)))
 
 
@@ -143,7 +143,7 @@ def _idx_from_JB_name(JB_name):
 def _has_invalid_or_non_empty_stderr(work_dir, num_bundles):
     has_errors = False
     for idx in range(num_bundles):
-        e_path = _job_path(work_dir, idx) + ".e"
+        e_path = _bundle_path(work_dir, idx) + ".e"
         try:
             if os.stat(e_path).st_size != 0:
                 has_errors = True
@@ -285,7 +285,7 @@ def _reduce_results(work_dir, bundles_of_jobs, logger):
 
     for idx, bundle_of_jobs in enumerate(bundles_of_jobs):
         num_jobs_in_bundle = len(bundle_of_jobs)
-        bundle_result_path = _job_path(work_dir, idx) + ".out"
+        bundle_result_path = _bundle_path(work_dir, idx) + ".out"
 
         try:
             bundle_result = pickle.loads(
@@ -305,6 +305,7 @@ class Pool:
     """
     Multiprocessing on a compute-cluster using queues.
     """
+
     def __init__(
         self,
         queue_name=None,
@@ -419,11 +420,14 @@ class Pool:
         sl.debug(
             "error-state-indicator: {:s}".format(self.error_state_indicator)
         )
+
         sl.info("Making work_dir {:s}".format(swd))
+
         os.makedirs(swd)
 
-        script_path = os.path.join(swd, "worker_node_script.py")
         sl.debug("Writing worker-node-script: {:s}".format(script_path))
+
+        script_path = os.path.join(swd, "worker_node_script.py")
         worker_node_script_str = _make_worker_node_script(
             module_name=function.__module__,
             function_name=function.__name__,
@@ -433,12 +437,13 @@ class Pool:
         _make_path_executable(path=script_path)
 
         sl.info("Bundle jobs")
+
         bundles_of_jobs = assign_jobs_to_bundles(
-            num_jobs=len(jobs),
-            num_bundles=self.num_bundles,
+            num_jobs=len(jobs), num_bundles=self.num_bundles,
         )
 
         sl.info("Mapping jobs into work_dir")
+
         JB_names_in_session = []
         for idx, bundle_of_jobs in enumerate(bundles_of_jobs):
             JB_name = _make_JB_name(session_id=session_id, idx=idx)
@@ -446,7 +451,7 @@ class Pool:
             bundle = [jobs[j] for j in bundle_of_jobs]
             nfs.write(
                 content=pickle.dumps(bundle),
-                path=_job_path(swd, idx),
+                path=_bundle_path(swd, idx),
                 mode="wb",
             )
 
@@ -459,10 +464,10 @@ class Pool:
                 queue_name=self.queue_name,
                 script_exe_path=self.python_path,
                 script_path=script_path,
-                arguments=[_job_path(swd, idx)],
+                arguments=[_bundle_path(swd, idx)],
                 JB_name=JB_name,
-                stdout_path=_job_path(swd, idx) + ".o",
-                stderr_path=_job_path(swd, idx) + ".e",
+                stdout_path=_bundle_path(swd, idx) + ".o",
+                stderr_path=_bundle_path(swd, idx) + ".e",
                 logger=self.logger,
             )
 
@@ -528,10 +533,10 @@ class Pool:
                         queue_name=self.queue_name,
                         script_exe_path=self.python_path,
                         script_path=script_path,
-                        arguments=[_job_path(swd, idx)],
+                        arguments=[_bundle_path(swd, idx)],
                         JB_name=job["JB_name"],
-                        stdout_path=_job_path(swd, idx) + ".o",
-                        stderr_path=_job_path(swd, idx) + ".e",
+                        stdout_path=_bundle_path(swd, idx) + ".o",
+                        stderr_path=_bundle_path(swd, idx) + ".e",
                         logger=self.logger,
                     )
 
@@ -549,13 +554,13 @@ class Pool:
 
         sl.info("Reducing results from work_dir")
         job_results_are_incomplete, job_results = _reduce_results(
-            work_dir=swd,
-            bundles_of_jobs=bundles_of_jobs,
-            logger=sl,
+            work_dir=swd, bundles_of_jobs=bundles_of_jobs, logger=sl,
         )
 
         has_stderr = False
-        if _has_invalid_or_non_empty_stderr(work_dir=swd, num_bundles=len(bundles_of_jobs)):
+        if _has_invalid_or_non_empty_stderr(
+            work_dir=swd, num_bundles=len(bundles_of_jobs)
+        ):
             has_stderr = True
             sl.warning("Found non zero stderr")
 

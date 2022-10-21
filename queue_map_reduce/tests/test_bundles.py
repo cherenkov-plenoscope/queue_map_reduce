@@ -11,7 +11,9 @@ def _flatten(bundles):
 
 def test_zero_jobs_and_valid_num_bundles():
     for num_bundles in [None, 1, 100]:
-        bundles = qmr_tools.assign_jobs_to_bundles(num_jobs=0, num_bundles=num_bundles)
+        bundles = qmr_tools.assign_jobs_to_bundles(
+            num_jobs=0, num_bundles=num_bundles
+        )
         assert len(bundles) == 0
 
 
