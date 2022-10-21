@@ -4,7 +4,7 @@ queue map reduce for python
 
 |TravisBuildStatus| |PyPIStatus| |BlackStyle|
 
-Queues for batch-jobs distribute your compute-jobs over multiple machines in parallel. This pool maps your jobs onto a queue and reduces the results.
+Queues for batch-jobs distribute your compute-tasks over multiple machines in parallel. This pool maps your tasks onto a queue and reduces the results.
 
 .. code:: python
 
@@ -18,11 +18,11 @@ A drop-in-replacement for builtins' ``map()``, and ``multiprocessing.Pool()``'s 
 Requirements
 ============
 
-- Programs ``qsub``, ``qstat``, and ``qdel`` are required to submit, monitor, and delete jobs.
+- Programs ``qsub``, ``qstat``, and ``qdel`` are required to submit, monitor, and delete queue-jobs.
 
-- Your ``function(job)`` must be part of an importable python module.
+- Your ``func(task)`` must be part of an importable python module.
 
-- Your ``jobs`` and their ``results`` must be able to serialize using pickle.
+- Your ``tasks`` and their ``results`` must be able to serialize using pickle.
 
 - Both worker-nodes and process-node can read and write from and to a common path in the file-system.
 
@@ -34,15 +34,15 @@ Tested flavors are:
 
 Features
 ========
-- Respects fair-share, i.e. slots are only occupied when they run your jobs.
+- Respects fair-share, i.e. slots are only occupied when the compute is done.
 
 - No spawning of additional threads. Neither on the process-node, nor on the worker-nodes.
 
 - No need for databases or web-servers.
 
-- Jobs with error-state ``'E'`` can be deleted, and resubmitted until your predefined upper limit is reached.
+- Queue-jobs with error-state ``'E'`` can be deleted, and resubmitted until your predefined upper limit is reached.
 
-- Can bundle jobs on worker-nodes to avoid start-up-overhead with many small jobs.
+- Can bundle tasks on worker-nodes to avoid start-up-overhead with many small tasks.
 
 Alternatives
 ============
@@ -58,33 +58,44 @@ Inner workings
 ==============
 - ``map()`` makes a ``work_dir`` because the mapping and reducing takes place in the file-system. You can set ``work_dir`` manually to make sure both worker-nodes and process-node can reach it.
 
-- ``map()`` serializes your ``jobs`` using ``pickle`` into separate files in ``work_dir/{idx:09d}.pkl``.
+- ``map()`` serializes your ``tasks`` using ``pickle`` into separate files in ``work_dir/{ichunk:09d}.pkl``.
 
 - ``map()`` reads all environment-variables in its process.
 
-- ``map()`` creates the worker-node-script in ``work_dir/worker_node_script.py``. It contains and exports the process' environment-variables into the batch-job's context. It reads the job in ``work_dir/{idx:09d}.pkl``, imports and runs your ``function(job)``, and finally writes the result back to ``work_dir/{idx:09d}.pkl.out``.
+- ``map()`` creates the worker-node-script in ``work_dir/worker_node_script.py``. It contains and exports the process' environment-variables into the batch-job's context. It reads the chunk of tasks in ``work_dir/{ichunk:09d}.pkl``, imports and runs your ``func(task)``, and finally writes the result back to ``work_dir/{ichunk:09d}.pkl.out``.
 
-- ``map()`` submits your jobs into the queue. The ``stdout`` and ``stderr`` of the jobs are written to ``work_dir/{idx:09d}.pkl.o`` and ``work_dir/{idx:09d}.pkl.e`` respectively. By default, ``shutil.which("python")`` is used to process the worker-node-script.
+- ``map()`` submits queue-jobs. The ``stdout`` and ``stderr`` of the tasks are written to ``work_dir/{ichunk:09d}.pkl.o`` and ``work_dir/{ichunk:09d}.pkl.e`` respectively. By default, ``shutil.which("python")`` is used to process the worker-node-script.
 
-- When all jobs are submitted, ``map()`` monitors the progress of its jobs. In case a job will run into an error-state, which is ``'E'`` by default, the job will be deleted and resubmitted until a maximum number of resubmissions is reached.
+- When all queue-jobs are submitted, ``map()`` monitors their progress. In case a queue-job runs into an error-state (``'E'`` by default) the job wFill be deleted and resubmitted until a maximum number of resubmissions is reached.
 
-- When no more jobs are running or pending, ``map()`` will reduce the results from ``work_dir/{idx:09d}.pkl.out``.
+- When no more queue-jobs are running or pending, ``map()`` will reduce the results from ``work_dir/{ichunk:09d}.pkl.out``.
 
-- In case of non zero ``stderr`` in any job, a missing result, or on the user's request, the ``work_dir`` will be kept for inspection. Otherwise its removed.
+- In case of non zero ``stderr`` in any task, a missing result, or on the user's request, the ``work_dir`` will be kept for inspection. Otherwise its removed.
 
-Identifying jobs
-----------------
-- ``JB_job_number`` is assigned to your job by the queue-system for its own book-keeping.
+Wording
+-------
 
-- ``JB_name`` is the name assigned to your job by our ``map()``. It is composed of the ``map()``'s session-id, and the ``idx`` of your job with respect to your lists of jobs. E.g. ``"q"%Y-%m-%dT%H:%M:%S"#{idx:09d}"``
+- ``task`` is a valid input to ``func``. The ``tasks`` are the actual payload to be processed.
 
-- ``idx`` is only used within our ``map()``. It is the index of your job with respect to your list of jobs. It is written into ``JB_name``, and it is the ``idx`` used to create the job's filenames such as ``work_dir/{idx:09d}.pkl``.
+- ``iterable`` is an iterable (list) of ``tasks``. It is the naming adopted from ``multiprocessing.Pool.map``.
+
+- ``itask`` is the index of a ``task`` in ``iterable``.
+
+- ``chunk`` is a chunk of ``tasks`` which is processed on a worker-node in serial.
+
+- ``ichunk`` is the index of a chunk. It is used to create the chunks's filenames such as ``work_dir/{ichunk:09d}.pkl``.
+
+- `queue-job` is what we submitt into the queue. Each queue-job processes the tasks in a single chunk in series.
+
+- ``JB_job_number`` is assigned to a queue-job by the queue-system for its own book-keeping.
+
+- ``JB_name`` is assigned to a queue-job by our ``map()``. It is composed of our ``map()``'s session-id, and ``ichunk``. E.g. ``"q"%Y-%m-%dT%H:%M:%S"#{ichunk:09d}"``
 
 Environment Variables
 ---------------------
-All the user's environment-variables in the process where ``map()`` is called will be exported in the job's context.
+All the user's environment-variables in the process where ``map()`` is called will be exported in the queue-job's context.
 
-The worker-node-script sets the environment-variables before calling ``function(job)``. We do not use ``qsub``'s argument ``-V`` because on some clusters this will not set all variables. Apparently some administrators fear security issues when using ``qsub -V`` to set ``LD_LIBRARY_PATH``.
+The worker-node-script sets the environment-variables. We do not use ``qsub``'s argument ``-V`` because on some clusters this will not set all variables. Apparently some administrators fear security issues when using ``qsub -V`` to set ``LD_LIBRARY_PATH``.
 
 Testing
 =======
@@ -98,11 +109,11 @@ dummy queue
 To test our ``map()`` we provide a dummy ``qsub``, ``qstat``, and ``qdel``.
 These are individual ``python``-scripts which all act on a common state-file in ``tests/resources/dummy_queue_state.json`` in order to fake the sun-grid-engine's queue.
 
-- ``dummy_qsub.py`` only appends jobs to the list of pending jobs in the state-file.
+- ``dummy_qsub.py`` only appends queue-jobs to the list of pending jobs in the state-file.
 
-- ``dummy_qdel.py`` only removes jobs from the state-file.
+- ``dummy_qdel.py`` only removes queue-jobs from the state-file.
 
-- ``dummy_qstat.py`` does move the jobs from the pending to the running list, and does trigger the actual processing of the jobs. Each time ``dummy_qstat.py`` is called it performs a single action on the state-file. So it must be called multiple times to process all jobs. It can intentionally bring jobs into the error-state when this is set in the state-file.
+- ``dummy_qstat.py`` does move the queue-jobs from the pending to the running list, and does trigger the actual processing of the jobs. Each time ``dummy_qstat.py`` is called it performs a single action on the state-file. So it must be called multiple times to process all jobs. It can intentionally bring jobs into the error-state when this is set in the state-file.
 
 Before running the dummy-queue, its state-file must be initialized:
 
