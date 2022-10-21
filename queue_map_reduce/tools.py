@@ -20,7 +20,7 @@ def _make_worker_node_script(module_name, function_name, environ):
     It reads the job, runs result = function(job), and writes the result.
     The script will be called on the worker-node with a single argument:
 
-    python script.py /some/path/to/work_dir/{idx:09d}.pkl
+    python script.py /some/path/to/work_dir/{ichunk:09d}.pkl
 
     On environment-variables
     ------------------------
@@ -53,13 +53,13 @@ def _make_worker_node_script(module_name, function_name, environ):
         "{add_environ:s}"
         "\n"
         "assert(len(sys.argv) == 2)\n"
-        'bundle = pickle.loads(nfs.read(sys.argv[1], mode="rb"))\n'
+        'chunk = pickle.loads(nfs.read(sys.argv[1], mode="rb"))\n'
         "job_results = []\n"
-        "for j, job in enumerate(bundle):\n"
+        "for j, job in enumerate(chunk):\n"
         "    try:\n"
         "        job_result = {function_name:s}(job)\n"
         "    except Exception as bad:\n"
-        '        print("[job ", j, ", in bundle]", file=sys.stderr)\n'
+        '        print("[job ", j, ", in chunk]", file=sys.stderr)\n'
         "        print(bad, file=sys.stderr)\n"
         "        job_result = None\n"
         "    job_results.append(job_result)\n"
@@ -104,8 +104,8 @@ def _qsub(
         raise
 
 
-def _bundle_path(work_dir, idx):
-    return os.path.abspath(os.path.join(work_dir, "{:09d}.pkl".format(idx)))
+def _chunk_path(work_dir, ichunk):
+    return os.path.abspath(os.path.join(work_dir, "{:09d}.pkl".format(ichunk)))
 
 
 def _session_id_from_time_now():
@@ -131,19 +131,19 @@ def _make_path_executable(path):
     os.chmod(path, st.st_mode | stat.S_IEXEC)
 
 
-def _make_JB_name(session_id, idx):
-    return "q{:s}#{:09d}".format(session_id, idx)
+def _make_JB_name(session_id, ichunk):
+    return "q{:s}#{:09d}".format(session_id, ichunk)
 
 
-def _idx_from_JB_name(JB_name):
-    idx_str = JB_name.split("#")[1]
-    return int(idx_str)
+def _ichunk_from_JB_name(JB_name):
+    ichunk_str = JB_name.split("#")[1]
+    return int(ichunk_str)
 
 
-def _has_invalid_or_non_empty_stderr(work_dir, num_bundles):
+def _has_invalid_or_non_empty_stderr(work_dir, num_chunks):
     has_errors = False
-    for idx in range(num_bundles):
-        e_path = _bundle_path(work_dir, idx) + ".e"
+    for ichunk in range(num_chunks):
+        e_path = _chunk_path(work_dir, ichunk) + ".e"
         try:
             if os.stat(e_path).st_size != 0:
                 has_errors = True
@@ -241,62 +241,62 @@ def _jobs_running_pending_error(
     )
 
 
-def assign_jobs_to_bundles(num_jobs, num_bundles):
+def assign_jobs_to_chunks(num_jobs, num_chunks):
     """
     When you have too many jobs for your parallel processing queue this
-    function bundles multiple jobs into fewer bundles.
+    function chunks multiple jobs into fewer chunks.
 
     Parameters
     ----------
     num_jobs : int
         Number of jobs.
-    num_bundles : int (optional)
-        The maximum number of bundles. Your jobs will be spread over
-        these many bundles. If None, each bundle contains a single job.
+    num_chunks : int (optional)
+        The maximum number of chunks. Your jobs will be spread over
+        these many chunks. If None, each chunk contains a single job.
 
     Returns
     -------
-        A list of bundles where each bundle is a list of job-indices.
-        The lengths of the list of bundles is <= num_bundles.
+        A list of chunks where each chunk is a list of job-indices.
+        The lengths of the list of chunks is <= num_chunks.
     """
-    if num_bundles is None:
-        num_jobs_in_bundle = 1
+    if num_chunks is None:
+        num_jobs_in_chunk = 1
     else:
-        assert num_bundles > 0
-        num_jobs_in_bundle = int(math.ceil(num_jobs / num_bundles))
+        assert num_chunks > 0
+        num_jobs_in_chunk = int(math.ceil(num_jobs / num_chunks))
 
-    bundles = []
-    current_bundle = []
+    chunks = []
+    current_chunk = []
     for j in range(num_jobs):
-        if len(current_bundle) < num_jobs_in_bundle:
-            current_bundle.append(j)
+        if len(current_chunk) < num_jobs_in_chunk:
+            current_chunk.append(j)
         else:
-            bundles.append(current_bundle)
-            current_bundle = []
-            current_bundle.append(j)
-    if len(current_bundle):
-        bundles.append(current_bundle)
-    return bundles
+            chunks.append(current_chunk)
+            current_chunk = []
+            current_chunk.append(j)
+    if len(current_chunk):
+        chunks.append(current_chunk)
+    return chunks
 
 
-def _reduce_results(work_dir, bundles_of_jobs, logger):
+def _reduce_results(work_dir, chunks, logger):
     job_results = []
     job_results_are_incomplete = False
 
-    for idx, bundle_of_jobs in enumerate(bundles_of_jobs):
-        num_jobs_in_bundle = len(bundle_of_jobs)
-        bundle_result_path = _bundle_path(work_dir, idx) + ".out"
+    for ichunk, chunk_of_jobs in enumerate(chunks):
+        num_jobs_in_chunk = len(chunk_of_jobs)
+        chunk_result_path = _chunk_path(work_dir, ichunk) + ".out"
 
         try:
-            bundle_result = pickle.loads(
-                nfs.read(path=bundle_result_path, mode="rb")
+            chunk_result = pickle.loads(
+                nfs.read(path=chunk_result_path, mode="rb")
             )
-            for job_result in bundle_result:
+            for job_result in chunk_result:
                 job_results.append(job_result)
         except FileNotFoundError:
             job_results_are_incomplete = True
-            logger.warning("No result: {:s}".format(bundle_result_path))
-            job_results += [None for i in range(num_jobs_in_bundle)]
+            logger.warning("No result: {:s}".format(chunk_result_path))
+            job_results += [None for i in range(num_jobs_in_chunk)]
 
     return job_results_are_incomplete, job_results
 
@@ -316,7 +316,7 @@ class Pool:
         max_num_resubmissions=10,
         error_state_indicator="E",
         logger=None,
-        num_bundles=None,
+        num_chunks=None,
         qsub_path="qsub",
         qstat_path="qstat",
         qdel_path="qdel",
@@ -343,10 +343,10 @@ class Pool:
         logger : logging.Logger(), optional
             Logger-instance from python's logging library. If None, a default
             logger is created which writes to sys.stdout.
-        num_bundles : int, optional
-            If provided, the jobs will be grouped in this many bundles.
-            The jobs in a bundle are computed serial on the worker-node.
-            It is useful to bundle jobs when the number of jobs is much larger
+        num_chunks : int, optional
+            If provided, the jobs will be grouped in this many chunks.
+            The jobs in a chunk are computed serial on the worker-node.
+            It is useful to chunk jobs when the number of jobs is much larger
             than the number of available slots for parallel computing and the
             start-up-time for a slot is not much smaller than the compute-time
             for a job.
@@ -360,7 +360,7 @@ class Pool:
         self.max_num_resubmissions = max_num_resubmissions
         self.error_state_indicator = error_state_indicator
         self.logger = logger
-        self.num_bundles = num_bundles
+        self.num_chunks = num_chunks
         self.qsub_path = qsub_path
         self.qstat_path = qstat_path
         self.qdel_path = qdel_path
@@ -425,9 +425,9 @@ class Pool:
 
         os.makedirs(swd)
 
+        script_path = os.path.join(swd, "worker_node_script.py")
         sl.debug("Writing worker-node-script: {:s}".format(script_path))
 
-        script_path = os.path.join(swd, "worker_node_script.py")
         worker_node_script_str = _make_worker_node_script(
             module_name=function.__module__,
             function_name=function.__name__,
@@ -436,38 +436,38 @@ class Pool:
         nfs.write(content=worker_node_script_str, path=script_path, mode="wt")
         _make_path_executable(path=script_path)
 
-        sl.info("Bundle jobs")
+        sl.info("chunk jobs")
 
-        bundles_of_jobs = assign_jobs_to_bundles(
-            num_jobs=len(jobs), num_bundles=self.num_bundles,
+        chunks = assign_jobs_to_chunks(
+            num_jobs=len(jobs), num_chunks=self.num_chunks,
         )
 
         sl.info("Mapping jobs into work_dir")
 
         JB_names_in_session = []
-        for idx, bundle_of_jobs in enumerate(bundles_of_jobs):
-            JB_name = _make_JB_name(session_id=session_id, idx=idx)
+        for ichunk, chunk in enumerate(chunks):
+            JB_name = _make_JB_name(session_id=session_id, ichunk=ichunk)
             JB_names_in_session.append(JB_name)
-            bundle = [jobs[j] for j in bundle_of_jobs]
+            chunk_payload = [jobs[j] for j in chunk]
             nfs.write(
-                content=pickle.dumps(bundle),
-                path=_bundle_path(swd, idx),
+                content=pickle.dumps(chunk_payload),
+                path=_chunk_path(swd, ichunk),
                 mode="wb",
             )
 
         sl.info("Submitting jobs")
 
         for JB_name in JB_names_in_session:
-            idx = _idx_from_JB_name(JB_name)
+            ichunk = _ichunk_from_JB_name(JB_name)
             _qsub(
                 qsub_path=self.qsub_path,
                 queue_name=self.queue_name,
                 script_exe_path=self.python_path,
                 script_path=script_path,
-                arguments=[_bundle_path(swd, idx)],
+                arguments=[_chunk_path(swd, ichunk)],
                 JB_name=JB_name,
-                stdout_path=_bundle_path(swd, idx) + ".o",
-                stderr_path=_bundle_path(swd, idx) + ".e",
+                stdout_path=_chunk_path(swd, ichunk) + ".o",
+                stderr_path=_chunk_path(swd, ichunk) + ".e",
                 logger=self.logger,
             )
 
@@ -475,7 +475,7 @@ class Pool:
 
         JB_names_in_session_set = set(JB_names_in_session)
         still_running = True
-        num_resubmissions_by_idx = {}
+        num_resubmissions_by_ichunk = {}
         while still_running:
             (
                 jobs_running,
@@ -491,8 +491,11 @@ class Pool:
             num_pending = len(jobs_pending)
             num_error = len(jobs_error)
             num_lost = 0
-            for idx in num_resubmissions_by_idx:
-                if num_resubmissions_by_idx[idx] >= self.max_num_resubmissions:
+            for ichunk in num_resubmissions_by_ichunk:
+                if (
+                    num_resubmissions_by_ichunk[ichunk]
+                    >= self.max_num_resubmissions
+                ):
                     num_lost += 1
 
             sl.info(
@@ -502,14 +505,14 @@ class Pool:
             )
 
             for job in jobs_error:
-                idx = _idx_from_JB_name(job["JB_name"])
-                if idx in num_resubmissions_by_idx:
-                    num_resubmissions_by_idx[idx] += 1
+                ichunk = _ichunk_from_JB_name(job["JB_name"])
+                if ichunk in num_resubmissions_by_ichunk:
+                    num_resubmissions_by_ichunk[ichunk] += 1
                 else:
-                    num_resubmissions_by_idx[idx] = 1
+                    num_resubmissions_by_ichunk[ichunk] = 1
 
-                job_id_str = "JB_name {:s}, JB_job_number {:s}, idx {:09d}".format(
-                    job["JB_name"], job["JB_job_number"], idx
+                job_id_str = "JB_name {:s}, JB_job_number {:s}, ichunk {:09d}".format(
+                    job["JB_name"], job["JB_job_number"], ichunk
                 )
                 sl.warning("Found error-state in: {:s}".format(job_id_str))
                 sl.warning("Deleting: {:s}".format(job_id_str))
@@ -520,10 +523,13 @@ class Pool:
                     logger=self.logger,
                 )
 
-                if num_resubmissions_by_idx[idx] <= self.max_num_resubmissions:
+                if (
+                    num_resubmissions_by_ichunk[ichunk]
+                    <= self.max_num_resubmissions
+                ):
                     sl.warning(
                         "Resubmitting {:d} of {:d}, JB_name {:s}".format(
-                            num_resubmissions_by_idx[idx],
+                            num_resubmissions_by_ichunk[ichunk],
                             self.max_num_resubmissions,
                             job["JB_name"],
                         )
@@ -533,17 +539,17 @@ class Pool:
                         queue_name=self.queue_name,
                         script_exe_path=self.python_path,
                         script_path=script_path,
-                        arguments=[_bundle_path(swd, idx)],
+                        arguments=[_chunk_path(swd, ichunk)],
                         JB_name=job["JB_name"],
-                        stdout_path=_bundle_path(swd, idx) + ".o",
-                        stderr_path=_bundle_path(swd, idx) + ".e",
+                        stdout_path=_chunk_path(swd, ichunk) + ".o",
+                        stderr_path=_chunk_path(swd, ichunk) + ".e",
                         logger=self.logger,
                     )
 
             if jobs_error:
                 nfs.write(
-                    content=json.dumps(num_resubmissions_by_idx, indent=4),
-                    path=os.path.join(swd, "num_resubmissions_by_idx.json"),
+                    content=json.dumps(num_resubmissions_by_ichunk, indent=4),
+                    path=os.path.join(swd, "num_resubmissions_by_ichunk.json"),
                     mode="wt",
                 )
 
@@ -554,12 +560,12 @@ class Pool:
 
         sl.info("Reducing results from work_dir")
         job_results_are_incomplete, job_results = _reduce_results(
-            work_dir=swd, bundles_of_jobs=bundles_of_jobs, logger=sl,
+            work_dir=swd, chunks=chunks, logger=sl,
         )
 
         has_stderr = False
         if _has_invalid_or_non_empty_stderr(
-            work_dir=swd, num_bundles=len(bundles_of_jobs)
+            work_dir=swd, num_chunks=len(chunks)
         ):
             has_stderr = True
             sl.warning("Found non zero stderr")

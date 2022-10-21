@@ -75,12 +75,12 @@ def test_extract_error_state_with_errors():
     assert len(e) == 300
 
 
-def test_job_name_idx():
-    idxs = [
+def test_job_name_ichunk():
+    ichunks = [
         1000 * 1000 * 1000 * i + 1000 * 1000 * i + 1000 * i + i
         for i in range(1000)
     ]
-    for idx in idxs:
-        JB_name = qmr_tools._make_JB_name(session_id="hans", idx=idx)
-        idx_back = qmr_tools._idx_from_JB_name(JB_name=JB_name)
-        assert idx_back == idx
+    for ichunk in ichunks:
+        JB_name = qmr_tools._make_JB_name(session_id="hans", ichunk=ichunk)
+        ichunk_back = qmr_tools._ichunk_from_JB_name(JB_name=JB_name)
+        assert ichunk_back == ichunk

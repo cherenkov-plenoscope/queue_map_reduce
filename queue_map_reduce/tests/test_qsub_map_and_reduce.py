@@ -139,7 +139,7 @@ def test_bundling_many_jobs():
             qstat_path=dummy.QSTAT_PATH,
             qdel_path=dummy.QDEL_PATH,
             work_dir=os.path.join(tmp, "my_work_dir"),
-            num_bundles=7,
+            num_chunks=7,
         )
         results = pool.map(function=numpy.sum, jobs=jobs)
 

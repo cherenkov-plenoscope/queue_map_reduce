@@ -72,11 +72,11 @@ assert sys.argv[1] == "-xml"
 with open(dummy_queue.QUEUE_STATE_PATH, "rt") as f:
     state = json.loads(f.read())
 
-evil_idxs_num_fails = {}
-evil_idxs_max_num_fails = {}
+evil_ichunks_num_fails = {}
+evil_ichunks_max_num_fails = {}
 for evil in state["evil_jobs"]:
-    evil_idxs_num_fails[evil["idx"]] = evil["num_fails"]
-    evil_idxs_max_num_fails[evil["idx"]] = evil["max_num_fails"]
+    evil_ichunks_num_fails[evil["ichunk"]] = evil["num_fails"]
+    evil_ichunks_max_num_fails[evil["ichunk"]] = evil["max_num_fails"]
 
 
 if len(state["running"]) >= MAX_NUM_RUNNING:
@@ -84,13 +84,13 @@ if len(state["running"]) >= MAX_NUM_RUNNING:
     actually_run_the_job(run_job)
 elif len(state["pending"]) > 0:
     job = state["pending"].pop(0)
-    idx = qmr.tools._idx_from_JB_name(job["JB_name"])
-    if idx in evil_idxs_num_fails:
-        if evil_idxs_num_fails[idx] < evil_idxs_max_num_fails[idx]:
+    ichunk = qmr.tools._ichunk_from_JB_name(job["JB_name"])
+    if ichunk in evil_ichunks_num_fails:
+        if evil_ichunks_num_fails[ichunk] < evil_ichunks_max_num_fails[ichunk]:
             job["@state"] = "?"
             job["state"] = "Eqw"
             state["pending"].append(job)
-            evil_idxs_num_fails[idx] += 1
+            evil_ichunks_num_fails[ichunk] += 1
         else:
             job["@state"] = "running"
             job["state"] = "r"
@@ -105,12 +105,12 @@ elif len(state["running"]) > 0:
 
 
 evil_jobs = []
-for idx in evil_idxs_num_fails:
+for ichunk in evil_ichunks_num_fails:
     evil_jobs.append(
         {
-            "idx": idx,
-            "num_fails": evil_idxs_num_fails[idx],
-            "max_num_fails": evil_idxs_max_num_fails[idx],
+            "ichunk": ichunk,
+            "num_fails": evil_ichunks_num_fails[ichunk],
+            "max_num_fails": evil_ichunks_max_num_fails[ichunk],
         }
     )
 state["evil_jobs"] = evil_jobs
