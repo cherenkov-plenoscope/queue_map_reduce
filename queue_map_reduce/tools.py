@@ -229,10 +229,7 @@ class Pool:
         sl.info("Mapping chunks of tasks into work_dir")
 
         JB_names_in_session = map_tasks_into_work_dir(
-            work_dir=swd,
-            tasks=tasks,
-            chunks=chunks,
-            session_id=session_id,
+            work_dir=swd, tasks=tasks, chunks=chunks, session_id=session_id,
         )
 
         sl.info("Submitting queue-jobs")
@@ -354,7 +351,9 @@ class Pool:
             work_dir=swd, num_chunks=len(chunks)
         )
         if has_stderr:
-            sl.warning("At least one task wrote to std-error or was not processed at all")
+            sl.warning(
+                "At least one task wrote to std-error or was not processed at all"
+            )
         if has_stderr or self.keep_work_dir or task_results_are_incomplete:
             sl.warning("Keeping work_dir: {:s}".format(swd))
         else:

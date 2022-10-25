@@ -1,5 +1,3 @@
-
-
 def get_jobs_running_pending_error(
     JB_names_set, error_state_indicator, all_jobs_running, all_jobs_pending
 ):

@@ -1,5 +1,3 @@
-
-
 def make_worker_node_script(func_module, func_name, environ):
     """
     Returns a string that is a python-script.

@@ -35,7 +35,7 @@ def test_filter_JB_name():
 def test_extract_error_state_no_errors():
     jobs_running = [{"state": "r"} for i in range(42)]
     jobs_pending = [{"state": "qw"} for i in range(1337)]
-    r, p, e =qmr.queue_job_organization.extract_error_from_running_pending(
+    r, p, e = qmr.queue_job_organization.extract_error_from_running_pending(
         jobs_running=jobs_running,
         jobs_pending=jobs_pending,
         error_state_indicator="E",
