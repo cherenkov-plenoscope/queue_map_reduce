@@ -84,7 +84,7 @@ if len(state["running"]) >= MAX_NUM_RUNNING:
     actually_run_the_job(run_job)
 elif len(state["pending"]) > 0:
     job = state["pending"].pop(0)
-    ichunk = qmr.tools._ichunk_from_JB_name(job["JB_name"])
+    ichunk = qmr.utils.make_ichunk_from_JB_name(job["JB_name"])
     if ichunk in evil_ichunks_num_fails:
         if evil_ichunks_num_fails[ichunk] < evil_ichunks_max_num_fails[ichunk]:
             job["@state"] = "?"

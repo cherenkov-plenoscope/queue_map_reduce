@@ -81,6 +81,8 @@ def test_job_name_ichunk():
         for i in range(1000)
     ]
     for ichunk in ichunks:
-        JB_name = qmr.tools._make_JB_name(session_id="hans", ichunk=ichunk)
-        ichunk_back = qmr.tools._ichunk_from_JB_name(JB_name=JB_name)
+        JB_name = qmr.utils.make_JB_name_from_ichunk(
+            session_id="hans", ichunk=ichunk,
+        )
+        ichunk_back = qmr.utils.make_ichunk_from_JB_name(JB_name=JB_name)
         assert ichunk_back == ichunk

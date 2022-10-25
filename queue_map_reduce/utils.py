@@ -4,6 +4,7 @@ import stat
 import logging
 import sys
 import shutil
+import time
 
 
 def assign_tasks_to_chunks(num_tasks, num_chunks):
@@ -64,3 +65,17 @@ def LoggerStdout():
 
 def default_python_path():
     return os.path.abspath(shutil.which("python"))
+
+
+def session_id_from_time_now():
+    # This must be a valid filename. No ':' for time.
+    return time.strftime("%Y-%m-%dT%H-%M-%S", time.gmtime())
+
+
+def make_JB_name_from_ichunk(session_id, ichunk):
+    return "q{:s}#{:09d}".format(session_id, ichunk)
+
+
+def make_ichunk_from_JB_name(JB_name):
+    ichunk_str = JB_name.split("#")[1]
+    return int(ichunk_str)

@@ -17,21 +17,7 @@ def _chunk_path(work_dir, ichunk):
     return os.path.abspath(os.path.join(work_dir, "{:09d}.pkl".format(ichunk)))
 
 
-def _session_id_from_time_now():
-    # This must be a valid filename. No ':' for time.
-    return time.strftime("%Y-%m-%dT%H-%M-%S", time.gmtime())
-
-
-def _make_JB_name(session_id, ichunk):
-    return "q{:s}#{:09d}".format(session_id, ichunk)
-
-
-def _ichunk_from_JB_name(JB_name):
-    ichunk_str = JB_name.split("#")[1]
-    return int(ichunk_str)
-
-
-def _has_invalid_or_non_empty_stderr(work_dir, num_chunks):
+def has_invalid_or_non_empty_stderr(work_dir, num_chunks):
     has_errors = False
     for ichunk in range(num_chunks):
         e_path = _chunk_path(work_dir, ichunk) + ".e"
@@ -46,7 +32,9 @@ def _has_invalid_or_non_empty_stderr(work_dir, num_chunks):
 def map_tasks_into_work_dir(work_dir, tasks, chunks, session_id):
     JB_names_in_session = []
     for ichunk, chunk in enumerate(chunks):
-        JB_name = _make_JB_name(session_id=session_id, ichunk=ichunk)
+        JB_name = utils.make_JB_name_from_ichunk(
+            session_id=session_id, ichunk=ichunk,
+        )
         JB_names_in_session.append(JB_name)
         chunk_payload = [tasks[itask] for itask in chunk]
         nfs.write(
@@ -182,7 +170,7 @@ class Pool:
         sl = self.logger
         swd = self.work_dir
 
-        session_id = _session_id_from_time_now()
+        session_id = utils.session_id_from_time_now()
 
         if swd is None:
             swd = os.path.abspath(os.path.join(".", ".qsub_" + session_id))
@@ -235,7 +223,7 @@ class Pool:
         sl.info("Submitting queue-jobs")
 
         for JB_name in JB_names_in_session:
-            ichunk = _ichunk_from_JB_name(JB_name)
+            ichunk = utils.make_ichunk_from_JB_name(JB_name)
             queue_call.qsub(
                 qsub_path=self.qsub_path,
                 queue_name=self.queue_name,
@@ -286,7 +274,7 @@ class Pool:
             )
 
             for job in jobs_error:
-                ichunk = _ichunk_from_JB_name(job["JB_name"])
+                ichunk = utils.make_ichunk_from_JB_name(job["JB_name"])
                 if ichunk in num_resubmissions_by_ichunk:
                     num_resubmissions_by_ichunk[ichunk] += 1
                 else:
@@ -347,7 +335,7 @@ class Pool:
             work_dir=swd, chunks=chunks, logger=sl,
         )
 
-        has_stderr = _has_invalid_or_non_empty_stderr(
+        has_stderr = has_invalid_or_non_empty_stderr(
             work_dir=swd, num_chunks=len(chunks)
         )
         if has_stderr:
