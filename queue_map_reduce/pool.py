@@ -13,14 +13,14 @@ from . import queue_worker_node_script
 from . import utils
 
 
-def _chunk_path(work_dir, ichunk):
-    return os.path.abspath(os.path.join(work_dir, "{:09d}.pkl".format(ichunk)))
+def chunk_path(work_dir, ichunk):
+    return os.path.join(work_dir, "{:09d}.pkl".format(ichunk))
 
 
 def has_invalid_or_non_empty_stderr(work_dir, num_chunks):
     has_errors = False
     for ichunk in range(num_chunks):
-        e_path = _chunk_path(work_dir, ichunk) + ".e"
+        e_path = chunk_path(work_dir, ichunk) + ".e"
         try:
             if os.stat(e_path).st_size != 0:
                 has_errors = True
@@ -39,7 +39,7 @@ def map_tasks_into_work_dir(work_dir, tasks, chunks, session_id):
         chunk_payload = [tasks[itask] for itask in chunk]
         nfs.write(
             content=pickle.dumps(chunk_payload),
-            path=_chunk_path(work_dir, ichunk),
+            path=chunk_path(work_dir, ichunk),
             mode="wb",
         )
     return JB_names_in_session
@@ -51,7 +51,7 @@ def reduce_task_results_from_work_dir(work_dir, chunks, logger):
 
     for ichunk, chunk in enumerate(chunks):
         num_tasks_in_chunk = len(chunk)
-        chunk_result_path = _chunk_path(work_dir, ichunk) + ".out"
+        chunk_result_path = chunk_path(work_dir, ichunk) + ".out"
 
         try:
             chunk_result = pickle.loads(
@@ -165,15 +165,13 @@ class Pool:
         -------
         results = pool.map(sum, [[1, 2], [2, 3], [4, 5], ])
         """
-
         tasks = iterable
-        sl = self.logger
-        swd = self.work_dir
-
         session_id = utils.session_id_from_time_now()
-
-        if swd is None:
-            swd = os.path.abspath(os.path.join(".", ".qsub_" + session_id))
+        if self.work_dir is None:
+            swd = os.path.abspath(os.path.join(".", ".qpool_" + session_id))
+        else:
+            swd = os.path.abspath(self.work_dir)
+        sl = self.logger
 
         sl.debug("Starting map()")
         sl.debug("qsub_path: {:s}".format(self.qsub_path))
@@ -194,7 +192,6 @@ class Pool:
         )
 
         sl.info("Making work_dir {:s}".format(swd))
-
         os.makedirs(swd)
 
         script_path = os.path.join(swd, "worker_node_script.py")
@@ -229,10 +226,10 @@ class Pool:
                 queue_name=self.queue_name,
                 script_exe_path=self.python_path,
                 script_path=script_path,
-                arguments=[_chunk_path(swd, ichunk)],
+                arguments=[chunk_path(swd, ichunk)],
                 JB_name=JB_name,
-                stdout_path=_chunk_path(swd, ichunk) + ".o",
-                stderr_path=_chunk_path(swd, ichunk) + ".e",
+                stdout_path=chunk_path(swd, ichunk) + ".o",
+                stderr_path=chunk_path(swd, ichunk) + ".e",
                 logger=self.logger,
             )
 
@@ -308,10 +305,10 @@ class Pool:
                         queue_name=self.queue_name,
                         script_exe_path=self.python_path,
                         script_path=script_path,
-                        arguments=[_chunk_path(swd, ichunk)],
+                        arguments=[chunk_path(swd, ichunk)],
                         JB_name=job["JB_name"],
-                        stdout_path=_chunk_path(swd, ichunk) + ".o",
-                        stderr_path=_chunk_path(swd, ichunk) + ".e",
+                        stdout_path=chunk_path(swd, ichunk) + ".o",
+                        stderr_path=chunk_path(swd, ichunk) + ".e",
                         logger=self.logger,
                     )
 
