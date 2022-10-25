@@ -1,4 +1,4 @@
-from queue_map_reduce import tools as qmr_tools
+import queue_map_reduce as qmr
 import pickle
 import numpy
 import os
@@ -23,7 +23,7 @@ def test_filter_JB_name():
 
     my_JB_names_set = set(JB_names_of_my_jobs)
 
-    my_jobs = qmr_tools._filter_jobs_by_JB_name(
+    my_jobs = qmr.queue_job_organization.filter_jobs_by_JB_name(
         jobs=all_jobs, JB_names_set=my_JB_names_set,
     )
 
@@ -35,7 +35,7 @@ def test_filter_JB_name():
 def test_extract_error_state_no_errors():
     jobs_running = [{"state": "r"} for i in range(42)]
     jobs_pending = [{"state": "qw"} for i in range(1337)]
-    r, p, e = qmr_tools._extract_error_from_running_pending(
+    r, p, e =qmr.queue_job_organization.extract_error_from_running_pending(
         jobs_running=jobs_running,
         jobs_pending=jobs_pending,
         error_state_indicator="E",
@@ -65,7 +65,7 @@ def test_extract_error_state_with_errors():
         }
         jobs_pending.append(job)
 
-    r, p, e = qmr_tools._extract_error_from_running_pending(
+    r, p, e = qmr.queue_job_organization.extract_error_from_running_pending(
         jobs_running=jobs_running,
         jobs_pending=jobs_pending,
         error_state_indicator="E",
@@ -81,6 +81,6 @@ def test_job_name_ichunk():
         for i in range(1000)
     ]
     for ichunk in ichunks:
-        JB_name = qmr_tools._make_JB_name(session_id="hans", ichunk=ichunk)
-        ichunk_back = qmr_tools._ichunk_from_JB_name(JB_name=JB_name)
+        JB_name = qmr.tools._make_JB_name(session_id="hans", ichunk=ichunk)
+        ichunk_back = qmr.tools._ichunk_from_JB_name(JB_name=JB_name)
         assert ichunk_back == ichunk

@@ -1,4 +1,4 @@
-from queue_map_reduce import tools as qmr_tools
+import queue_map_reduce as qmr
 import pytest
 
 
@@ -11,7 +11,7 @@ def _flatten(chunks):
 
 def test_zero_tasks_and_valid_num_chunks():
     for num_chunks in [None, 1, 100]:
-        chunks = qmr_tools.assign_tasks_to_chunks(
+        chunks = qmr.utils.assign_tasks_to_chunks(
             num_tasks=0, num_chunks=num_chunks
         )
         assert len(chunks) == 0
@@ -19,14 +19,14 @@ def test_zero_tasks_and_valid_num_chunks():
 
 def test_zero_tasks_and_bad_num_chunks():
     with pytest.raises(AssertionError):
-        chunks = qmr_tools.assign_tasks_to_chunks(num_tasks=0, num_chunks=0)
+        chunks = qmr.utils.assign_tasks_to_chunks(num_tasks=0, num_chunks=0)
 
     with pytest.raises(AssertionError):
-        chunks = qmr_tools.assign_tasks_to_chunks(num_tasks=0, num_chunks=-1)
+        chunks = qmr.utils.assign_tasks_to_chunks(num_tasks=0, num_chunks=-1)
 
 
 def test_many_tasks_one_bundle():
-    chunks = qmr_tools.assign_tasks_to_chunks(num_tasks=100, num_chunks=1)
+    chunks = qmr.utils.assign_tasks_to_chunks(num_tasks=100, num_chunks=1)
     assert len(chunks) == 1
 
     itasks = _flatten(chunks)
@@ -36,7 +36,7 @@ def test_many_tasks_one_bundle():
 
 
 def test_many_tasks_many_chunks():
-    chunks = qmr_tools.assign_tasks_to_chunks(num_tasks=1000, num_chunks=10)
+    chunks = qmr.utils.assign_tasks_to_chunks(num_tasks=1000, num_chunks=10)
     assert len(chunks) == 10
 
     itasks = _flatten(chunks)
@@ -46,7 +46,7 @@ def test_many_tasks_many_chunks():
 
 
 def test_few_tasks_many_chunks():
-    chunks = qmr_tools.assign_tasks_to_chunks(num_tasks=10, num_chunks=100)
+    chunks = qmr.utils.assign_tasks_to_chunks(num_tasks=10, num_chunks=100)
     assert len(chunks) == 10
 
     itasks = _flatten(chunks)

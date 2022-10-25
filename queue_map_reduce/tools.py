@@ -2,106 +2,15 @@ import pickle
 import os
 import stat
 import subprocess
-import qstat
 import time
 import shutil
 import json
-import logging
-import sys
-import math
+
 from . import network_file_system as nfs
-
-
-def _make_worker_node_script(func_module, func_name, environ):
-    """
-    Returns a string that is a python-script.
-    This python-script will be executed on the worker-node.
-    In here, the environment variables are set explicitly.
-    It reads the chunk of tasks, runs result = func(task), and writes the
-    result. The script is called on the worker-node with a single argument:
-
-    python script.py /some/path/to/work_dir/{ichunk:09d}.pkl
-
-    On environment-variables
-    ------------------------
-    There is the '-V' option in qsub which is meant to export ALL environment-
-    variables in the batch-job's context. And on many clusters this works fine.
-    However, I encountered clusters where this does not work.
-    For example ```LD_LIBRARY_PATH``` is often forced to be empty for reasons
-    of security. So the admins say.
-    This is why we set the einvironment-variables here in the
-    worker-node-script.
-    """
-    add_environ = ""
-    for key in environ:
-        add_environ += 'os.environ["{key:s}"] = "{value:s}"\n'.format(
-            key=key.encode("unicode_escape").decode(),
-            value=environ[key].encode("unicode_escape").decode(),
-        )
-
-    return (
-        ""
-        "# I was generated automatically by queue_map_reduce.\n"
-        "# I will be executed on the worker-nodes.\n"
-        "# Do not modify me.\n"
-        "from {func_module:s} import {func_name:s}\n"
-        "import pickle\n"
-        "import sys\n"
-        "import os\n"
-        "from queue_map_reduce import network_file_system as nfs\n"
-        "\n"
-        "{add_environ:s}"
-        "\n"
-        "assert(len(sys.argv) == 2)\n"
-        'chunk = pickle.loads(nfs.read(sys.argv[1], mode="rb"))\n'
-        "task_results = []\n"
-        "for j, task in enumerate(chunk):\n"
-        "    try:\n"
-        "        task_result = {func_name:s}(task)\n"
-        "    except Exception as bad:\n"
-        '        print("[task ", j, ", in chunk]", file=sys.stderr)\n'
-        "        print(bad, file=sys.stderr)\n"
-        "        task_result = None\n"
-        "    task_results.append(task_result)\n"
-        "\n"
-        'nfs.write(pickle.dumps(task_results), sys.argv[1]+".out", mode="wb")\n'
-        "".format(
-            func_module=func_module,
-            func_name=func_name,
-            add_environ=add_environ,
-        )
-    )
-
-
-def _qsub(
-    qsub_path,
-    queue_name,
-    script_exe_path,
-    script_path,
-    arguments,
-    JB_name,
-    stdout_path,
-    stderr_path,
-    logger,
-):
-    cmd = [qsub_path]
-    if queue_name:
-        cmd += ["-q", queue_name]
-    cmd += ["-o", stdout_path]
-    cmd += ["-e", stderr_path]
-    cmd += ["-N", JB_name]
-    cmd += ["-S", script_exe_path]
-    cmd += [script_path]
-    for argument in arguments:
-        cmd += [argument]
-
-    try:
-        subprocess.check_output(cmd, stderr=subprocess.STDOUT)
-    except subprocess.CalledProcessError as e:
-        logger.critical("Error in qsub()")
-        logger.critical("qsub() returncode: {:d}".format(e.returncode))
-        logger.critical(e.output)
-        raise
+from . import queue_call
+from . import queue_job_organization
+from . import queue_worker_node_script
+from . import utils
 
 
 def _chunk_path(work_dir, ichunk):
@@ -111,24 +20,6 @@ def _chunk_path(work_dir, ichunk):
 def _session_id_from_time_now():
     # This must be a valid filename. No ':' for time.
     return time.strftime("%Y-%m-%dT%H-%M-%S", time.gmtime())
-
-
-def DefaultLoggerStdout():
-    lggr = logging.Logger(name=__name__)
-    fmtr = logging.Formatter(
-        fmt="%(asctime)s, %(levelname)s, %(module)s:%(funcName)s, %(message)s",
-        datefmt="%Y-%m-%dT%H:%M:%S",
-    )
-    stha = logging.StreamHandler(sys.stdout)
-    stha.setFormatter(fmtr)
-    lggr.addHandler(stha)
-    lggr.setLevel(logging.DEBUG)
-    return lggr
-
-
-def _make_path_executable(path):
-    st = os.stat(path)
-    os.chmod(path, st.st_mode | stat.S_IEXEC)
 
 
 def _make_JB_name(session_id, ichunk):
@@ -152,134 +43,21 @@ def _has_invalid_or_non_empty_stderr(work_dir, num_chunks):
     return has_errors
 
 
-def __qdel(JB_job_number, qdel_path, logger):
-    try:
-        _ = subprocess.check_output(
-            [qdel_path, str(JB_job_number)], stderr=subprocess.STDOUT,
+def map_tasks_into_work_dir(work_dir, tasks, chunks, session_id):
+    JB_names_in_session = []
+    for ichunk, chunk in enumerate(chunks):
+        JB_name = _make_JB_name(session_id=session_id, ichunk=ichunk)
+        JB_names_in_session.append(JB_name)
+        chunk_payload = [tasks[itask] for itask in chunk]
+        nfs.write(
+            content=pickle.dumps(chunk_payload),
+            path=_chunk_path(work_dir, ichunk),
+            mode="wb",
         )
-    except subprocess.CalledProcessError as e:
-        logger.critical("qdel returncode: {:s}".format(e.returncode))
-        logger.critical("qdel stdout: {:s}".format(e.output))
-        raise
+    return JB_names_in_session
 
 
-def _qdel(JB_job_number, qdel_path, logger):
-    while True:
-        try:
-            __qdel(JB_job_number, qdel_path, logger=logger)
-            break
-        except KeyboardInterrupt:
-            raise
-        except Exception as bad:
-            logger.warning("Problem in qdel()")
-            logger.warning(str(bad))
-            time.sleep(1)
-
-
-def _qstat(qstat_path, logger):
-    """
-    Return lists of running and pending jobs.
-    Try again in case of Failure.
-    Only except KeyboardInterrupt to stop.
-    """
-    while True:
-        try:
-            running, pending = qstat.qstat(qstat_path=qstat_path)
-            break
-        except KeyboardInterrupt:
-            raise
-        except Exception as bad:
-            logger.warning("Problem in qstat()")
-            logger.warning(str(bad))
-            time.sleep(1)
-    return running, pending
-
-
-def _filter_jobs_by_JB_name(jobs, JB_names_set):
-    my_jobs = []
-    for job in jobs:
-        if job["JB_name"] in JB_names_set:
-            my_jobs.append(job)
-    return my_jobs
-
-
-def _extract_error_from_running_pending(
-    jobs_running, jobs_pending, error_state_indicator
-):
-    # split into runnning, pending, and error
-    _running = []
-    _pending = []
-    _error = []
-
-    for job in jobs_running:
-        if error_state_indicator in job["state"]:
-            _error.append(job)
-        else:
-            _running.append(job)
-
-    for job in jobs_pending:
-        if error_state_indicator in job["state"]:
-            _error.append(job)
-        else:
-            _pending.append(job)
-
-    return _running, _pending, _error
-
-
-def _jobs_running_pending_error(
-    JB_names_set, error_state_indicator, qstat_path, logger
-):
-    all_jobs_running, all_jobs_pending = _qstat(
-        qstat_path=qstat_path, logger=logger
-    )
-    jobs_running = _filter_jobs_by_JB_name(all_jobs_running, JB_names_set)
-    jobs_pending = _filter_jobs_by_JB_name(all_jobs_pending, JB_names_set)
-    return _extract_error_from_running_pending(
-        jobs_running=jobs_running,
-        jobs_pending=jobs_pending,
-        error_state_indicator=error_state_indicator,
-    )
-
-
-def assign_tasks_to_chunks(num_tasks, num_chunks):
-    """
-    When you have too many tasks for your parallel processing queue this
-    function chunks multiple tasks into fewer chunks.
-
-    Parameters
-    ----------
-    num_tasks : int
-        Number of tasks.
-    num_chunks : int (optional)
-        The maximum number of chunks. Your tasks will be spread over
-        these many chunks. If None, each chunk contains a single task.
-
-    Returns
-    -------
-        A list of chunks where each chunk is a list of task-indices `itask`.
-        The lengths of the list of chunks is <= num_chunks.
-    """
-    if num_chunks is None:
-        num_tasks_in_chunk = 1
-    else:
-        assert num_chunks > 0
-        num_tasks_in_chunk = int(math.ceil(num_tasks / num_chunks))
-
-    chunks = []
-    current_chunk = []
-    for j in range(num_tasks):
-        if len(current_chunk) < num_tasks_in_chunk:
-            current_chunk.append(j)
-        else:
-            chunks.append(current_chunk)
-            current_chunk = []
-            current_chunk.append(j)
-    if len(current_chunk):
-        chunks.append(current_chunk)
-    return chunks
-
-
-def _reduce_results(work_dir, chunks, logger):
+def reduce_task_results_from_work_dir(work_dir, chunks, logger):
     task_results = []
     task_results_are_incomplete = False
 
@@ -295,7 +73,9 @@ def _reduce_results(work_dir, chunks, logger):
                 task_results.append(task_result)
         except FileNotFoundError:
             task_results_are_incomplete = True
-            logger.warning("No result: {:s}".format(chunk_result_path))
+            logger.warning(
+                "Expected results in: {:s}".format(chunk_result_path)
+            )
             task_results += [None for i in range(num_tasks_in_chunk)]
 
     return task_results_are_incomplete, task_results
@@ -309,7 +89,7 @@ class Pool:
     def __init__(
         self,
         queue_name=None,
-        python_path=os.path.abspath(shutil.which("python")),
+        python_path=None,
         polling_interval_qstat=5,
         work_dir=None,
         keep_work_dir=False,
@@ -353,7 +133,10 @@ class Pool:
         """
 
         self.queue_name = queue_name
-        self.python_path = python_path
+        if python_path is None:
+            self.python_path = utils.default_python_path()
+        else:
+            self.python_path = python_path
         self.polling_interval_qstat = polling_interval_qstat
         self.work_dir = work_dir
         self.keep_work_dir = keep_work_dir
@@ -366,7 +149,7 @@ class Pool:
         self.qdel_path = qdel_path
 
         if self.logger is None:
-            self.logger = DefaultLoggerStdout()
+            self.logger = utils.LoggerStdout()
 
     def __repr__(self):
         return self.__class__.__name__ + "()"
@@ -404,7 +187,7 @@ class Pool:
         if swd is None:
             swd = os.path.abspath(os.path.join(".", ".qsub_" + session_id))
 
-        sl.info("Starting map()")
+        sl.debug("Starting map()")
         sl.debug("qsub_path: {:s}".format(self.qsub_path))
         sl.debug("qstat_path: {:s}".format(self.qstat_path))
         sl.debug("qdel_path: {:s}".format(self.qdel_path))
@@ -429,38 +212,34 @@ class Pool:
         script_path = os.path.join(swd, "worker_node_script.py")
         sl.debug("Writing worker-node-script: {:s}".format(script_path))
 
-        worker_node_script_str = _make_worker_node_script(
+        worker_node_script = queue_worker_node_script.make_worker_node_script(
             func_module=func.__module__,
             func_name=func.__name__,
             environ=dict(os.environ),
         )
-        nfs.write(content=worker_node_script_str, path=script_path, mode="wt")
-        _make_path_executable(path=script_path)
+        nfs.write(content=worker_node_script, path=script_path, mode="wt")
+        utils.make_path_executable(path=script_path)
 
-        sl.info("Make chunks of tasks")
+        sl.debug("Make chunks of tasks")
 
-        chunks = assign_tasks_to_chunks(
+        chunks = utils.assign_tasks_to_chunks(
             num_tasks=len(tasks), num_chunks=self.num_chunks,
         )
 
         sl.info("Mapping chunks of tasks into work_dir")
 
-        JB_names_in_session = []
-        for ichunk, chunk in enumerate(chunks):
-            JB_name = _make_JB_name(session_id=session_id, ichunk=ichunk)
-            JB_names_in_session.append(JB_name)
-            chunk_payload = [tasks[itask] for itask in chunk]
-            nfs.write(
-                content=pickle.dumps(chunk_payload),
-                path=_chunk_path(swd, ichunk),
-                mode="wb",
-            )
+        JB_names_in_session = map_tasks_into_work_dir(
+            work_dir=swd,
+            tasks=tasks,
+            chunks=chunks,
+            session_id=session_id,
+        )
 
         sl.info("Submitting queue-jobs")
 
         for JB_name in JB_names_in_session:
             ichunk = _ichunk_from_JB_name(JB_name)
-            _qsub(
+            queue_call.qsub(
                 qsub_path=self.qsub_path,
                 queue_name=self.queue_name,
                 script_exe_path=self.python_path,
@@ -478,15 +257,19 @@ class Pool:
         still_running = True
         num_resubmissions_by_ichunk = {}
         while still_running:
+            all_jobs_running, all_jobs_pending = queue_call.qstat(
+                qstat_path=self.qstat_path, logger=self.logger
+            )
+
             (
                 jobs_running,
                 jobs_pending,
                 jobs_error,
-            ) = _jobs_running_pending_error(
+            ) = queue_job_organization.get_jobs_running_pending_error(
                 JB_names_set=JB_names_in_session_set,
                 error_state_indicator=self.error_state_indicator,
-                qstat_path=self.qstat_path,
-                logger=self.logger,
+                all_jobs_running=all_jobs_running,
+                all_jobs_pending=all_jobs_pending,
             )
             num_running = len(jobs_running)
             num_pending = len(jobs_pending)
@@ -518,7 +301,7 @@ class Pool:
                 sl.warning("Found error-state in: {:s}".format(job_id_str))
                 sl.warning("Deleting: {:s}".format(job_id_str))
 
-                _qdel(
+                queue_call.qdel(
                     JB_job_number=job["JB_job_number"],
                     qdel_path=self.qdel_path,
                     logger=self.logger,
@@ -535,7 +318,7 @@ class Pool:
                             job["JB_name"],
                         )
                     )
-                    _qsub(
+                    queue_call.qsub(
                         qsub_path=self.qsub_path,
                         queue_name=self.queue_name,
                         script_exe_path=self.python_path,
@@ -560,23 +343,24 @@ class Pool:
             time.sleep(self.polling_interval_qstat)
 
         sl.info("Reducing results from work_dir")
-        task_results_are_incomplete, task_results = _reduce_results(
+        (
+            task_results_are_incomplete,
+            task_results,
+        ) = reduce_task_results_from_work_dir(
             work_dir=swd, chunks=chunks, logger=sl,
         )
 
-        has_stderr = False
-        if _has_invalid_or_non_empty_stderr(
+        has_stderr = _has_invalid_or_non_empty_stderr(
             work_dir=swd, num_chunks=len(chunks)
-        ):
-            has_stderr = True
-            sl.warning("Found non zero stderr")
-
+        )
+        if has_stderr:
+            sl.warning("At least one task wrote to std-error or was not processed at all")
         if has_stderr or self.keep_work_dir or task_results_are_incomplete:
             sl.warning("Keeping work_dir: {:s}".format(swd))
         else:
             sl.info("Removing work_dir: {:s}".format(swd))
             shutil.rmtree(swd)
 
-        sl.info("Stopping map()")
+        sl.debug("Stopping map()")
 
         return task_results
