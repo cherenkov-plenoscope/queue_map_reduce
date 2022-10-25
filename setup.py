@@ -5,7 +5,7 @@ with open("README.rst", "r") as f:
     long_description = f.read()
 
 setuptools.setup(
-    name="queue_map_reduce_relleums",
+    name="queue_map_reduce_sebastian-achim-mueller",
     version="1.1.1",
     author="Sebastian Achim Mueller",
     author_email="sebastian-achim.mueller@mpi-hd.mpg.de",
