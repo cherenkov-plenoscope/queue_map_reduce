@@ -134,7 +134,7 @@ Because of the global state-file, only one instance of dummy_queue must run at a
 .. |TravisBuildStatus| image:: https://travis-ci.org/cherenkov-plenoscope/queue_map_reduce.svg?branch=master
    :target: https://travis-ci.org/cherenkov-plenoscope/queue_map_reduce
 
-.. |PyPIStatus| image:: https://badge.fury.io/py/queue-map-reduce-relleums.svg
+.. |PyPIStatus| image:: https://badge.fury.io/py/queue_map_reduce_sebastian-achim-mueller.svg
    :target: https://pypi.org/project/queue-map-reduce-relleums
 
 .. |BlackStyle| image:: https://img.shields.io/badge/code%20style-black-000000.svg
