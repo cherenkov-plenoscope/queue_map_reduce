@@ -7,9 +7,7 @@ import shutil
 import json
 
 from . import network_file_system as nfs
-from . import queue_call
-from . import queue_job_organization
-from . import queue_worker_node_script
+from . import queue
 from . import utils
 
 
@@ -197,7 +195,7 @@ class Pool:
         script_path = os.path.join(swd, "worker_node_script.py")
         sl.debug("Writing worker-node-script: {:s}".format(script_path))
 
-        worker_node_script = queue_worker_node_script.make_worker_node_script(
+        worker_node_script = queue.worker_node_script.make_worker_node_script(
             func_module=func.__module__,
             func_name=func.__name__,
             environ=dict(os.environ),
@@ -221,7 +219,7 @@ class Pool:
 
         for JB_name in JB_names_in_session:
             ichunk = utils.make_ichunk_from_JB_name(JB_name)
-            queue_call.qsub(
+            queue.call.qsub(
                 qsub_path=self.qsub_path,
                 queue_name=self.queue_name,
                 script_exe_path=self.python_path,
@@ -239,7 +237,7 @@ class Pool:
         still_running = True
         num_resubmissions_by_ichunk = {}
         while still_running:
-            all_jobs_running, all_jobs_pending = queue_call.qstat(
+            all_jobs_running, all_jobs_pending = queue.call.qstat(
                 qstat_path=self.qstat_path, logger=self.logger
             )
 
@@ -247,7 +245,7 @@ class Pool:
                 jobs_running,
                 jobs_pending,
                 jobs_error,
-            ) = queue_job_organization.get_jobs_running_pending_error(
+            ) = queue.job_organization.get_jobs_running_pending_error(
                 JB_names_set=JB_names_in_session_set,
                 error_state_indicator=self.error_state_indicator,
                 all_jobs_running=all_jobs_running,
@@ -283,7 +281,7 @@ class Pool:
                 sl.warning("Found error-state in: {:s}".format(job_id_str))
                 sl.warning("Deleting: {:s}".format(job_id_str))
 
-                queue_call.qdel(
+                queue.call.qdel(
                     JB_job_number=job["JB_job_number"],
                     qdel_path=self.qdel_path,
                     logger=self.logger,
@@ -300,7 +298,7 @@ class Pool:
                             job["JB_name"],
                         )
                     )
-                    queue_call.qsub(
+                    queue.call.qsub(
                         qsub_path=self.qsub_path,
                         queue_name=self.queue_name,
                         script_exe_path=self.python_path,
