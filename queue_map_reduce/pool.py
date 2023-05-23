@@ -108,7 +108,6 @@ class Pool:
         keep_work_dir=False,
         max_num_resubmissions=10,
         error_state_indicator="E",
-        logger=None,
         num_chunks=None,
         qsub_path="qsub",
         qstat_path="qstat",
@@ -133,9 +132,6 @@ class Pool:
         max_num_resubmissions: int, optional
             In case of error-state in queue-job, the job will be tried this
             often to be resubmitted befor giving up on it.
-        logger : logging.Logger(), optional
-            Logger-instance from python's logging library. If None, a default
-            logger is created which writes to sys.stdout.
         num_chunks : int, optional
             If provided, the tasks are grouped in this many chunks.
             The tasks in a chunk are computed in serial on the worker-node.
@@ -155,14 +151,10 @@ class Pool:
         self.keep_work_dir = keep_work_dir
         self.max_num_resubmissions = max_num_resubmissions
         self.error_state_indicator = error_state_indicator
-        self.logger = logger
         self.num_chunks = num_chunks
         self.qsub_path = qsub_path
         self.qstat_path = qstat_path
         self.qdel_path = qdel_path
-
-        if self.logger is None:
-            self.logger = utils.LoggerStdout()
 
     def __repr__(self):
         return self.__class__.__name__ + "()"
@@ -196,7 +188,9 @@ class Pool:
             swd = os.path.abspath(os.path.join(".", ".qpool_" + session_id))
         else:
             swd = os.path.abspath(self.work_dir)
-        sl = self.logger
+
+        os.makedirs(swd)
+        sl = utils.LoggerFile(path=os.path.join(swd, "log.jsonl"))
 
         sl.debug("Starting map()")
         sl.debug("qsub_path: {:s}".format(self.qsub_path))
@@ -215,9 +209,6 @@ class Pool:
         sl.debug(
             "error-state-indicator: {:s}".format(self.error_state_indicator)
         )
-
-        sl.info("Making work_dir {:s}".format(swd))
-        os.makedirs(swd)
 
         script_path = os.path.join(swd, "worker_node_script.py")
         sl.debug("Writing worker-node-script: {:s}".format(script_path))
@@ -255,7 +246,7 @@ class Pool:
                 JB_name=JB_name,
                 stdout_path=chunk_path(swd, ichunk) + ".o",
                 stderr_path=chunk_path(swd, ichunk) + ".e",
-                logger=self.logger,
+                logger=sl,
             )
 
         sl.info("Waiting for queue-jobs to finish")
@@ -267,7 +258,7 @@ class Pool:
 
         while still_running:
             all_jobs_running, all_jobs_pending = queue.call.qstat(
-                qstat_path=self.qstat_path, logger=self.logger
+                qstat_path=self.qstat_path, logger=sl
             )
 
             (
@@ -315,7 +306,7 @@ class Pool:
                 queue.call.qdel(
                     JB_job_number=job["JB_job_number"],
                     qdel_path=self.qdel_path,
-                    logger=self.logger,
+                    logger=sl,
                 )
 
                 if (
@@ -338,7 +329,7 @@ class Pool:
                         JB_name=job["JB_name"],
                         stdout_path=chunk_path(swd, ichunk) + ".o",
                         stderr_path=chunk_path(swd, ichunk) + ".e",
-                        logger=self.logger,
+                        logger=sl,
                     )
 
             if jobs_error:
@@ -373,7 +364,5 @@ class Pool:
         else:
             sl.info("Removing work_dir: {:s}".format(swd))
             shutil.rmtree(swd)
-
-        sl.debug("Stopping map()")
 
         return task_results
