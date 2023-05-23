@@ -65,6 +65,35 @@ def reduce_task_results_from_work_dir(work_dir, chunks, logger):
     return task_results_are_incomplete, task_results
 
 
+def num_jobs_init():
+    return {"running": 0, "pending": 0, "error": 0, "lost": 0}
+
+
+def num_jobs_is_equal(a, b):
+    for key in a:
+        if a[key] != b[key]:
+            return False
+    return True
+
+
+def num_jobs_estimate(
+    len_jobs_running,
+    len_jobs_pending,
+    len_jobs_error,
+    num_resubmissions_by_ichunk,
+    max_num_resubmissions,
+):
+    num_jobs = num_jobs_init()
+    num_jobs["running"] = len_jobs_running
+    num_jobs["pending"] = len_jobs_pending
+    num_jobs["error"] = len_jobs_error
+    num_jobs["lost"] = 0
+    for ichunk in num_resubmissions_by_ichunk:
+        if num_resubmissions_by_ichunk[ichunk] >= max_num_resubmissions:
+            num_jobs["lost"] += 1
+    return num_jobs
+
+
 class Pool:
     """
     Multiprocessing on a compute-cluster using queues.
@@ -234,6 +263,8 @@ class Pool:
         JB_names_in_session_set = set(JB_names_in_session)
         still_running = True
         num_resubmissions_by_ichunk = {}
+        last_num_jobs = num_jobs_init()
+
         while still_running:
             all_jobs_running, all_jobs_pending = queue.call.qstat(
                 qstat_path=self.qstat_path, logger=self.logger
@@ -249,22 +280,24 @@ class Pool:
                 all_jobs_running=all_jobs_running,
                 all_jobs_pending=all_jobs_pending,
             )
-            num_running = len(jobs_running)
-            num_pending = len(jobs_pending)
-            num_error = len(jobs_error)
-            num_lost = 0
-            for ichunk in num_resubmissions_by_ichunk:
-                if (
-                    num_resubmissions_by_ichunk[ichunk]
-                    >= self.max_num_resubmissions
-                ):
-                    num_lost += 1
-
-            sl.info(
-                "{: 4d} running, {: 4d} pending, {: 4d} error, {: 4d} lost".format(
-                    num_running, num_pending, num_error, num_lost,
-                )
+            num_jobs = num_jobs_estimate(
+                len_jobs_running=len(jobs_running),
+                len_jobs_pending=len(jobs_pending),
+                len_jobs_error=len(jobs_error),
+                num_resubmissions_by_ichunk=num_resubmissions_by_ichunk,
+                max_num_resubmissions=self.max_num_resubmissions,
             )
+
+            if not num_jobs_is_equal(num_jobs, last_num_jobs):
+                sl.info(
+                    "{: 4d} running, {: 4d} pending, {: 4d} error, {: 4d} lost".format(
+                        num_jobs["running"],
+                        num_jobs["pending"],
+                        num_jobs["error"],
+                        num_jobs["lost"],
+                    )
+                )
+            last_num_jobs = num_jobs
 
             for job in jobs_error:
                 ichunk = utils.make_ichunk_from_JB_name(job["JB_name"])
@@ -315,7 +348,7 @@ class Pool:
                     mode="wt",
                 )
 
-            if num_running == 0 and num_pending == 0:
+            if num_jobs["running"] == 0 and num_jobs["pending"] == 0:
                 still_running = False
 
             time.sleep(self.polling_interval_qstat)
