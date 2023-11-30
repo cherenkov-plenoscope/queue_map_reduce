@@ -65,6 +65,35 @@ def reduce_task_results_from_work_dir(work_dir, chunks, logger):
     return task_results_are_incomplete, task_results
 
 
+def num_jobs_init():
+    return {"running": 0, "pending": 0, "error": 0, "lost": 0}
+
+
+def num_jobs_is_equal(a, b):
+    for key in a:
+        if a[key] != b[key]:
+            return False
+    return True
+
+
+def num_jobs_estimate(
+    len_jobs_running,
+    len_jobs_pending,
+    len_jobs_error,
+    num_resubmissions_by_ichunk,
+    max_num_resubmissions,
+):
+    num_jobs = num_jobs_init()
+    num_jobs["running"] = len_jobs_running
+    num_jobs["pending"] = len_jobs_pending
+    num_jobs["error"] = len_jobs_error
+    num_jobs["lost"] = 0
+    for ichunk in num_resubmissions_by_ichunk:
+        if num_resubmissions_by_ichunk[ichunk] >= max_num_resubmissions:
+            num_jobs["lost"] += 1
+    return num_jobs
+
+
 class Pool:
     """
     Multiprocessing on a compute-cluster using queues.
@@ -79,7 +108,6 @@ class Pool:
         keep_work_dir=False,
         max_num_resubmissions=10,
         error_state_indicator="E",
-        logger=None,
         num_chunks=None,
         qsub_path="qsub",
         qstat_path="qstat",
@@ -104,9 +132,6 @@ class Pool:
         max_num_resubmissions: int, optional
             In case of error-state in queue-job, the job will be tried this
             often to be resubmitted befor giving up on it.
-        logger : logging.Logger(), optional
-            Logger-instance from python's logging library. If None, a default
-            logger is created which writes to sys.stdout.
         num_chunks : int, optional
             If provided, the tasks are grouped in this many chunks.
             The tasks in a chunk are computed in serial on the worker-node.
@@ -126,14 +151,10 @@ class Pool:
         self.keep_work_dir = keep_work_dir
         self.max_num_resubmissions = max_num_resubmissions
         self.error_state_indicator = error_state_indicator
-        self.logger = logger
         self.num_chunks = num_chunks
         self.qsub_path = qsub_path
         self.qstat_path = qstat_path
         self.qdel_path = qdel_path
-
-        if self.logger is None:
-            self.logger = utils.LoggerStdout()
 
     def __repr__(self):
         return self.__class__.__name__ + "()"
@@ -167,7 +188,9 @@ class Pool:
             swd = os.path.abspath(os.path.join(".", ".qpool_" + session_id))
         else:
             swd = os.path.abspath(self.work_dir)
-        sl = self.logger
+
+        os.makedirs(swd)
+        sl = utils.LoggerFile(path=os.path.join(swd, "log.jsonl"))
 
         sl.debug("Starting map()")
         sl.debug("qsub_path: {:s}".format(self.qsub_path))
@@ -186,9 +209,6 @@ class Pool:
         sl.debug(
             "error-state-indicator: {:s}".format(self.error_state_indicator)
         )
-
-        sl.info("Making work_dir {:s}".format(swd))
-        os.makedirs(swd)
 
         script_path = os.path.join(swd, "worker_node_script.py")
         sl.debug("Writing worker-node-script: {:s}".format(script_path))
@@ -226,7 +246,7 @@ class Pool:
                 JB_name=JB_name,
                 stdout_path=chunk_path(swd, ichunk) + ".o",
                 stderr_path=chunk_path(swd, ichunk) + ".e",
-                logger=self.logger,
+                logger=sl,
             )
 
         sl.info("Waiting for queue-jobs to finish")
@@ -234,9 +254,11 @@ class Pool:
         JB_names_in_session_set = set(JB_names_in_session)
         still_running = True
         num_resubmissions_by_ichunk = {}
+        last_num_jobs = num_jobs_init()
+
         while still_running:
             all_jobs_running, all_jobs_pending = queue.call.qstat(
-                qstat_path=self.qstat_path, logger=self.logger
+                qstat_path=self.qstat_path, logger=sl
             )
 
             (
@@ -249,22 +271,24 @@ class Pool:
                 all_jobs_running=all_jobs_running,
                 all_jobs_pending=all_jobs_pending,
             )
-            num_running = len(jobs_running)
-            num_pending = len(jobs_pending)
-            num_error = len(jobs_error)
-            num_lost = 0
-            for ichunk in num_resubmissions_by_ichunk:
-                if (
-                    num_resubmissions_by_ichunk[ichunk]
-                    >= self.max_num_resubmissions
-                ):
-                    num_lost += 1
-
-            sl.info(
-                "{: 4d} running, {: 4d} pending, {: 4d} error, {: 4d} lost".format(
-                    num_running, num_pending, num_error, num_lost,
-                )
+            num_jobs = num_jobs_estimate(
+                len_jobs_running=len(jobs_running),
+                len_jobs_pending=len(jobs_pending),
+                len_jobs_error=len(jobs_error),
+                num_resubmissions_by_ichunk=num_resubmissions_by_ichunk,
+                max_num_resubmissions=self.max_num_resubmissions,
             )
+
+            if not num_jobs_is_equal(num_jobs, last_num_jobs):
+                sl.info(
+                    "{: 4d} running, {: 4d} pending, {: 4d} error, {: 4d} lost".format(
+                        num_jobs["running"],
+                        num_jobs["pending"],
+                        num_jobs["error"],
+                        num_jobs["lost"],
+                    )
+                )
+            last_num_jobs = num_jobs
 
             for job in jobs_error:
                 ichunk = utils.make_ichunk_from_JB_name(job["JB_name"])
@@ -282,7 +306,7 @@ class Pool:
                 queue.call.qdel(
                     JB_job_number=job["JB_job_number"],
                     qdel_path=self.qdel_path,
-                    logger=self.logger,
+                    logger=sl,
                 )
 
                 if (
@@ -305,7 +329,7 @@ class Pool:
                         JB_name=job["JB_name"],
                         stdout_path=chunk_path(swd, ichunk) + ".o",
                         stderr_path=chunk_path(swd, ichunk) + ".e",
-                        logger=self.logger,
+                        logger=sl,
                     )
 
             if jobs_error:
@@ -315,7 +339,7 @@ class Pool:
                     mode="wt",
                 )
 
-            if num_running == 0 and num_pending == 0:
+            if num_jobs["running"] == 0 and num_jobs["pending"] == 0:
                 still_running = False
 
             time.sleep(self.polling_interval_qstat)
@@ -340,7 +364,5 @@ class Pool:
         else:
             sl.info("Removing work_dir: {:s}".format(swd))
             shutil.rmtree(swd)
-
-        sl.debug("Stopping map()")
 
         return task_results

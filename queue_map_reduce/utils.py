@@ -50,17 +50,25 @@ def make_path_executable(path):
     os.chmod(path, st.st_mode | stat.S_IEXEC)
 
 
-def LoggerStdout():
-    logger = logging.Logger(name=__name__)
-    formatter = logging.Formatter(
-        fmt="%(asctime)s, %(levelname)s, %(module)s:%(funcName)s, %(message)s",
-        datefmt="%Y-%m-%dT%H:%M:%S",
-    )
-    streamhandler = logging.StreamHandler(sys.stdout)
-    streamhandler.setFormatter(formatter)
-    logger.addHandler(streamhandler)
-    logger.setLevel(logging.INFO)
-    return logger
+def LoggerFile(path, name="file"):
+    DATEFMT_ISO8601 = "%Y-%m-%dT%H:%M:%S"
+    FMT = "{"
+    FMT += '"t":"%(asctime)s.%(msecs)03d"'
+    FMT += ", "
+    FMT += '"c":"%(pathname)s:%(funcName)s:%(lineno)s"'
+    FMT += ", "
+    FMT += '"l":"%(levelname)s"'
+    FMT += ", "
+    FMT += '"m":"%(message)s"'
+    FMT += "}"
+
+    lggr = logging.Logger(name=name)
+    file_handler = logging.FileHandler(filename=path, mode="w")
+    fmtr = logging.Formatter(fmt=FMT, datefmt=DATEFMT_ISO8601)
+    file_handler.setFormatter(fmtr)
+    lggr.addHandler(file_handler)
+    lggr.setLevel(logging.DEBUG)
+    return lggr
 
 
 def default_python_path():
