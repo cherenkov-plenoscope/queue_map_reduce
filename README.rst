@@ -4,6 +4,16 @@ queue map reduce for python
 
 |TravisBuildStatus| |PyPIStatus| |BlackStyle|
 
+
+DEPRICATED AND REPLACED
+=======================
+This package got replaced by the more general pypoolparty_.
+Our maintancene and development of ``queue_map_reduce`` ends here.
+
+
+Description
+===========
+
 Queues for batch-jobs distribute your compute-tasks over multiple machines in parallel. This pool maps your tasks onto a queue and reduces the results.
 
 .. code:: python
@@ -145,3 +155,5 @@ Because of the global state-file, only one instance of dummy_queue must run at a
 .. _pyABC.sge: https://pyabc.readthedocs.io/en/latest/api_sge.html
 
 .. _ipyparallel: https://ipyparallel.readthedocs.io/en/latest/index.html
+
+.. _pypoolparty: https://pypi.org/project/pypoolparty
